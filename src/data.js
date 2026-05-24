@@ -71,6 +71,21 @@ export const senadores = [
   { nombre: 'Matías Walker', partido: 'DEM', bloque: 'Oficialismo', region: 'Coquimbo', cargo: 'Senador' },
   { nombre: 'Enrique Lee', partido: 'DEM', bloque: 'Oficialismo', region: 'Arica y Parinacota', cargo: 'Senador (Ind-DEM)' },
   { nombre: 'Rojo Edwards', partido: 'Independiente', bloque: 'Oficialismo', region: 'Metropolitana', cargo: 'Senador' },
+  { nombre: 'Benjamín Lorca Inzunza', partido: 'Republicano', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 6 },
+  { nombre: 'Jorge Brito Hasbun', partido: 'FA', bloque: 'Oposición', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Pier Karlezi Hazleby', partido: 'PNL', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Lorena Fries Monleón', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Zandra Parisi Fernández', partido: 'PDG', bloque: 'Independiente', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Macarena Santelices Cañas', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Fernando Zamorano Peralta', partido: 'PPD', bloque: 'Oposición', region: "O'Higgins", distrito: 15 },
+  { nombre: 'Guillermo Valdés Carmona', partido: 'PDG', bloque: 'Independiente', region: 'Maule', distrito: 17 },
+  { nombre: 'Germán Verdugo Soto', partido: 'PNL', bloque: 'Oficialismo', region: 'Maule', distrito: 17 },
+  { nombre: 'Daniel Bustos Leal', partido: 'Republicano', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 18 },
+  { nombre: 'Roberto Arroyo González', partido: 'PS', bloque: 'Oposición', region: 'Biobío', distrito: 20 },
+  { nombre: 'Lilian Betancurt Delgado', partido: 'PDG', bloque: 'Independiente', region: 'Biobío', distrito: 21 },
+  { nombre: 'Flor Contreras Vivallo', partido: 'PDG', bloque: 'Independiente', region: 'La Araucanía', distrito: 23 },
+  { nombre: 'Cristián Neira Martínez', partido: 'Republicano', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 23 },
+  { nombre: 'Daniel Valenzuela', partido: 'RN', bloque: 'Oficialismo', region: 'Los Ríos', distrito: 24 },
 ]
 
 export const diputados = [
@@ -89,7 +104,7 @@ export const diputados = [
   { nombre: 'Cristian Tapia Ramos', partido: 'PPD', bloque: 'Oposición', region: 'Atacama', distrito: 4 },
   { nombre: 'Jaime Mulet', partido: 'FREVS', bloque: 'Oposición', region: 'Atacama', distrito: 4 },
   { nombre: 'Paula Olmos', partido: 'PDG', bloque: 'Independiente', region: 'Atacama', distrito: 4 },
-  { nombre: 'Ignacio Urcullu', partido: 'Republicano', bloque: 'Oficialismo', region: 'Atacama', distrito: 4 },
+  { nombre: 'Ignacio Clement-Lund', partido: 'Republicano', bloque: 'Oficialismo', region: 'Atacama', distrito: 4 },
   { nombre: 'Daniel Manouchehri', partido: 'PS', bloque: 'Oposición', region: 'Coquimbo', distrito: 5 },
   { nombre: 'Nathalie Castillo', partido: 'PC', bloque: 'Oposición', region: 'Coquimbo', distrito: 5 },
   { nombre: 'Carolina Tello', partido: 'FA', bloque: 'Oposición', region: 'Coquimbo', distrito: 5 },
@@ -157,9 +172,9 @@ export const diputados = [
   { nombre: 'Roberto Celedón', partido: 'FA', bloque: 'Oposición', region: 'Biobío', distrito: 17 },
   { nombre: 'Benjamín Moreno Bascur', partido: 'Republicano', bloque: 'Oficialismo', region: 'Biobío', distrito: 17 },
   { nombre: 'Jorge Guzmán Zepeda', partido: 'Evópoli', bloque: 'Oficialismo', region: 'Biobío', distrito: 17 },
-  { nombre: 'Cristián Menchaca', partido: 'Republicano', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 18 },
-  { nombre: 'Consuelo Veloso', partido: 'PR', bloque: 'Oposición', region: 'La Araucanía', distrito: 18 },
-  { nombre: 'Rodrigo Ramírez Parra', partido: 'RN', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 18 },
+  { nombre: 'Cristián Menchaca Munita', partido: 'Republicano', bloque: 'Oficialismo', region: 'Maule', distrito: 18 },
+  { nombre: 'Consuelo Veloso Ávila', partido: 'PR', bloque: 'Oposición', region: 'Maule', distrito: 18 },
+  { nombre: 'Rodrigo Ramírez Parra', partido: 'RN', bloque: 'Oficialismo', region: 'Maule', distrito: 18 },
   { nombre: 'Cristóbal Martínez', partido: 'UDI', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 19 },
   { nombre: 'Carlos Chandía', partido: 'RN', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 19 },
   { nombre: 'Felipe Camaño', partido: 'PDC', bloque: 'Oposición', region: 'La Araucanía', distrito: 19 },
@@ -180,7 +195,7 @@ export const diputados = [
   { nombre: 'Gloria Naveillán', partido: 'PNL', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 22 },
   { nombre: 'Andrea Parra', partido: 'PPD', bloque: 'Oposición', region: 'Los Lagos', distrito: 22 },
   { nombre: 'José Montalva', partido: 'PPD', bloque: 'Oposición', region: 'Aysén', distrito: 23 },
-  { nombre: 'Ericka Ñanco', partido: 'FA', bloque: 'Oposición', region: 'Aysén', distrito: 23 },
+  { nombre: 'Coca Ñanco Vásquez', partido: 'FA', bloque: 'Oposición', region: 'Aysén', distrito: 23 },
   { nombre: 'Stephan Schubert', partido: 'Republicano', bloque: 'Oficialismo', region: 'Aysén', distrito: 23 },
   { nombre: 'Tomás Kast', partido: 'Evópoli', bloque: 'Oficialismo', region: 'Aysén', distrito: 23 },
   { nombre: 'René Manuel García', partido: 'RN', bloque: 'Oficialismo', region: 'Aysén', distrito: 23 },
@@ -204,26 +219,34 @@ export const diputados = [
   { nombre: 'Alejandro Riquelme', partido: 'Republicano', bloque: 'Oficialismo', region: 'Magallanes', distrito: 28 },
   { nombre: 'Javiera Morales', partido: 'FA', bloque: 'Oposición', region: 'Magallanes', distrito: 28 },
   // Distrito 5 faltantes
-  { nombre: 'Bernardo Salinas', partido: 'Independiente', bloque: 'Oficialismo', region: 'Coquimbo', distrito: 5 },
-  // Distrito 7 faltante
-  { nombre: 'Sebastián Zamora', partido: 'Republicano', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 7 },
-  // Distrito 8 faltante
-  { nombre: 'Enrique Bassaletti', partido: 'Independiente', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 8 },
-  // Distrito 9 faltante
-  { nombre: 'Javiera Rodríguez', partido: 'Independiente', bloque: 'Oposición', region: 'Metropolitana', distrito: 9 },
-  // Distrito 10 faltante
-  { nombre: 'Emilia Schneider', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 10 },
-  // Distrito 11 faltantes
-  { nombre: 'Cristián Araya', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 11 },
-  { nombre: 'Claudia Mora Vega', partido: 'Independiente', bloque: 'Oposición', region: 'Metropolitana', distrito: 11 },
   // Distrito 12 faltante
   { nombre: 'Benjamín Lorca', partido: 'Independiente', bloque: 'Oposición', region: 'O\'Higgins', distrito: 12 },
-  // Distrito 13 faltante
-  { nombre: 'Valentina Becerra', partido: 'Independiente', bloque: 'Oposición', region: 'Maule', distrito: 13 },
-  // Distrito 14 faltante
-  { nombre: 'Juan Irarrázaval', partido: 'Independiente', bloque: 'Oficialismo', region: 'Maule', distrito: 14 },
-  // Distrito 17 faltante
-  { nombre: 'Javier Muñoz Riquelme', partido: 'Independiente', bloque: 'Oposición', region: 'Biobío', distrito: 17 },
-  // Distrito 19 faltante
-  { nombre: 'Sergio Bobadilla', partido: 'UDI', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 19 },
-]
+  { nombre: 'Javiera Rodríguez Pascual', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 9 },
+  { nombre: 'Claudia Mora Vega', partido: 'RN', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 11 },
+  { nombre: 'Cristián Araya', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 11 },
+  { nombre: 'Álvaro Carter Fernández', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Pamela Jiles Moreno', partido: 'PDG', bloque: 'Independiente', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Ana María Gazmuri', partido: 'AH', bloque: 'Oposición', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Ximena Ossandón', partido: 'RN', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Daniela Serrano Salazar', partido: 'PC', bloque: 'Oposición', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Valentina Becerra Peña', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 13 },
+
+  { nombre: 'Emilia Schneider Videla', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Enrique Bassaletti Riess', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Javier Muñoz Riquelme', partido: 'PDC', bloque: 'Oposición', region: 'Maule', distrito: 17 },
+  { nombre: 'Sergio Bobadilla Muñoz', partido: 'UDI', bloque: 'Oficialismo', region: 'Biobío', distrito: 20 },
+  { nombre: 'Daniel Valenzuela Vásquez', partido: 'RN', bloque: 'Oficialismo', region: 'Los Ríos', distrito: 24 },
+
+  { nombre: 'Sebastián Zamora Soto', partido: 'Republicano', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Juan Irarrázaval Rossel', partido: 'Republicano', bloque: 'Oficialismo', region: 'Maule', distrito: 14 },
+
+
+  { nombre: 'Pier Karlezi Hazleby', partido: 'PNL', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Lorena Fries Monleón', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Jorge Brito Hasbun', partido: 'FA', bloque: 'Oposición', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Fernando Zamorano Peralta', partido: 'PPD', bloque: 'Oposición', region: 'Valparaíso', distrito: 15 },
+  { nombre: 'Guillermo Valdés Carmona', partido: 'PDG', bloque: 'Independiente', region: 'Maule', distrito: 17 },
+  { nombre: 'Germán Verdugo Soto', partido: 'PNL', bloque: 'Oficialismo', region: 'Maule', distrito: 17 },
+  { nombre: 'Daniel Bustos Leal', partido: 'Republicano', bloque: 'Oficialismo', region: 'Maule', distrito: 18 },
+  { nombre: 'Lilian Betancurt Delgado', partido: 'PDG', bloque: 'Independiente', region: 'Biobío', distrito: 21 },
+  { nombre: 'Flor Contreras Vivallo', partido: 'PDG', bloque: 'Independiente', region: 'La Araucanía', distrito: 23 },]
