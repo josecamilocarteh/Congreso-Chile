@@ -1,150 +1,252 @@
-import { useState } from 'react'
-import { diputados, PARTIDO_COLORS } from '../data'
-
-const REGIONES = [...new Set(diputados.map(d => d.region))].sort()
-const PARTIDOS = [...new Set(diputados.map(d => d.partido))].sort()
-const DISTRITOS = [...new Set(diputados.map(d => d.distrito))].sort((a,b) => a-b)
-
-export default function Diputados() {
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroPartido, setFiltroPartido] = useState('Todos')
-  const [filtroRegion, setFiltroRegion] = useState('Todas')
-  const [filtroBloque, setFiltroBloque] = useState('Todos')
-  const [filtroDistrito, setFiltroDistrito] = useState('Todos')
-
-  const filtrados = diputados.filter(d => {
-    const matchBusqueda = d.nombre.toLowerCase().includes(busqueda.toLowerCase())
-    const matchPartido = filtroPartido === 'Todos' || d.partido === filtroPartido
-    const matchRegion = filtroRegion === 'Todas' || d.region === filtroRegion
-    const matchBloque = filtroBloque === 'Todos' || d.bloque === filtroBloque
-    const matchDistrito = filtroDistrito === 'Todos' || d.distrito === parseInt(filtroDistrito)
-    return matchBusqueda && matchPartido && matchRegion && matchBloque && matchDistrito
-  })
-
-  const oposicion = diputados.filter(d => d.bloque === 'Oposición').length
-  const oficialismo = diputados.filter(d => d.bloque === 'Oficialismo').length
-  const independiente = diputados.filter(d => d.bloque === 'Independiente').length
-
-  // Distribución por partido
-  const porPartido = PARTIDOS.map(p => ({
-    partido: p,
-    count: diputados.filter(d => d.partido === p).length,
-    color: PARTIDO_COLORS[p] || '#94a3b8'
-  })).sort((a, b) => b.count - a.count)
-
-  return (
-    <div>
-      {/* STATS */}
-      <div style={styles.statsRow}>
-        {[
-          { label: 'Total diputados', value: diputados.length, color: '#1e40af' },
-          { label: 'Oposición', value: oposicion, color: '#dc2626' },
-          { label: 'Oficialismo', value: oficialismo, color: '#1d6fce' },
-          { label: 'Independientes', value: independiente, color: '#6b7280' },
-        ].map(s => (
-          <div key={s.label} style={styles.statCard}>
-            <div style={{ ...styles.statNum, color: s.color }}>{s.value}</div>
-            <div style={styles.statLabel}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* DISTRIBUCIÓN POR PARTIDO */}
-      <div style={styles.card}>
-        <div style={styles.cardTitle}>Distribución por partido</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-          {porPartido.map(({ partido, count, color }) => (
-            <div key={partido} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f8fafc', borderRadius: 8, padding: '6px 12px', border: '1px solid #e2e8f0' }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{partido}</span>
-              <span style={{ fontSize: 13, color: '#64748b' }}>— {count}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Barra proporcional */}
-        <div style={{ display: 'flex', height: 20, borderRadius: 10, overflow: 'hidden', marginTop: 16 }}>
-          {porPartido.map(({ partido, count, color }) => (
-            <div key={partido} title={`${partido}: ${count}`}
-              style={{ width: `${(count / diputados.length) * 100}%`, background: color, cursor: 'pointer', transition: 'opacity 0.15s' }}
-              onMouseEnter={e => e.target.style.opacity = 0.7}
-              onMouseLeave={e => e.target.style.opacity = 1}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* BUSCADOR Y FILTROS */}
-      <div style={styles.card}>
-        <div style={styles.cardTitle}>Lista de Diputadas y Diputados</div>
-        <div style={styles.filtersRow}>
-          <input
-            placeholder="🔍 Buscar diputado..."
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            style={styles.input}
-          />
-          <select value={filtroBloque} onChange={e => setFiltroBloque(e.target.value)} style={styles.select}>
-            <option>Todos</option>
-            <option>Oficialismo</option>
-            <option>Oposición</option>
-            <option>Independiente</option>
-          </select>
-          <select value={filtroPartido} onChange={e => setFiltroPartido(e.target.value)} style={styles.select}>
-            <option value="Todos">Todos los partidos</option>
-            {PARTIDOS.map(p => <option key={p}>{p}</option>)}
-          </select>
-          <select value={filtroRegion} onChange={e => setFiltroRegion(e.target.value)} style={styles.select}>
-            <option value="Todas">Todas las regiones</option>
-            {REGIONES.map(r => <option key={r}>{r}</option>)}
-          </select>
-          <select value={filtroDistrito} onChange={e => setFiltroDistrito(e.target.value)} style={styles.select}>
-            <option value="Todos">Todos los distritos</option>
-            {DISTRITOS.map(d => <option key={d} value={d}>Distrito {d}</option>)}
-          </select>
-        </div>
-        <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>{filtrados.length} diputados</div>
-        <div style={styles.table}>
-          <div style={styles.tableHeader}>
-            <div style={{ flex: 2 }}>Nombre</div>
-            <div>Partido</div>
-            <div>Bloque</div>
-            <div>Región</div>
-            <div>Distrito</div>
-          </div>
-          {filtrados.map((d, i) => (
-            <div key={i} style={{ ...styles.tableRow, background: i % 2 === 0 ? 'white' : '#f8fafc' }}>
-              <div style={{ flex: 2, fontWeight: 500, color: '#0f172a' }}>{d.nombre}</div>
-              <div>
-                <span style={{ ...styles.partidoBadge, background: PARTIDO_COLORS[d.partido] || '#94a3b8' }}>
-                  {d.partido}
-                </span>
-              </div>
-              <div style={{ color: d.bloque === 'Oficialismo' ? '#b45309' : d.bloque === 'Oposición' ? '#1e40af' : '#6b7280', fontWeight: 600, fontSize: 12 }}>
-                {d.bloque}
-              </div>
-              <div style={{ color: '#64748b', fontSize: 12 }}>{d.region}</div>
-              <div style={{ color: '#94a3b8', fontSize: 12 }}>D{d.distrito}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
+export const PARTIDO_COLORS = {
+  'RN': '#1d6fce',
+  'UDI': '#f59e0b',
+  'Republicano': '#1e3a8a',
+  'Evópoli': '#06b6d4',
+  'DEM': '#9ca3af',
+  'PS': '#dc2626',
+  'PPD': '#f97316',
+  'PDC': '#e879a0',
+  'PC': '#7f1d1d',
+  'FA': '#a855f7',
+  'FREVS': '#22c55e',
+  'Liberal': '#fbbf24',
+  'Independiente': '#6b7280',
+  'PDG': '#8b5cf6',
+  'PNL': '#0ea5e9',
+  'AH': '#10b981',
+  'PR': '#ec4899',
 }
 
-const styles = {
-  statsRow: { display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' },
-  statCard: { background: 'white', borderRadius: 10, padding: '16px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', flex: 1, minWidth: 100 },
-  statNum: { fontSize: 28, fontWeight: 700, lineHeight: 1 },
-  statLabel: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  card: { background: 'white', borderRadius: 12, padding: 24, marginBottom: 24, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
-  cardTitle: { fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 },
-  filtersRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 },
-  input: { flex: 2, padding: '8px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 14, fontFamily: "'Inter', sans-serif", minWidth: 180 },
-  select: { padding: '8px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: "'Inter', sans-serif", background: 'white', color: '#475569' },
-  table: { borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0' },
-  tableHeader: { display: 'flex', gap: 12, padding: '10px 16px', background: '#f8fafc', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
-  tableRow: { display: 'flex', gap: 12, padding: '10px 16px', fontSize: 13, alignItems: 'center', borderTop: '1px solid #f1f5f9' },
-  partidoBadge: { display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, color: 'white' },
-}
+export const senadores = [
+  // OPOSICIÓN
+  { nombre: 'Alfonso de Urresti', partido: 'PS', bloque: 'Oposición', region: 'Los Ríos', cargo: 'Senador' },
+  { nombre: 'Juan Luis Castro', partido: 'PS', bloque: 'Oposición', region: 'O\'Higgins', cargo: 'Senador' },
+  { nombre: 'Fidel Espinoza', partido: 'PS', bloque: 'Oposición', region: 'Los Lagos', cargo: 'Senador' },
+  { nombre: 'Gastón Saavedra', partido: 'PS', bloque: 'Oposición', region: 'Biobío', cargo: 'Senador' },
+  { nombre: 'Danisa Astudillo', partido: 'PS', bloque: 'Oposición', region: 'Tarapacá', cargo: 'Senadora' },
+  { nombre: 'Daniella Cicardini', partido: 'PS', bloque: 'Oposición', region: 'Atacama', cargo: 'Senadora' },
+  { nombre: 'Paulina Vodanovic', partido: 'PS', bloque: 'Oposición', region: 'La Araucanía', cargo: 'Senadora' },
+  { nombre: 'Pedro Araya Guerrero', partido: 'PPD', bloque: 'Oposición', region: 'Antofagasta', cargo: 'Senador (Ind-PPD)' },
+  { nombre: 'Loreto Carvajal', partido: 'PPD', bloque: 'Oposición', region: 'Ñuble', cargo: 'Senadora' },
+  { nombre: 'Ricardo Celis', partido: 'PPD', bloque: 'Oposición', region: 'La Araucanía', cargo: 'Senador (Ind-PPD)' },
+  { nombre: 'Ximena Órdenes', partido: 'PPD', bloque: 'Oposición', region: 'Aysén', cargo: 'Senadora (Ind-PPD)' },
+  { nombre: 'Francisco Huenchumilla', partido: 'PDC', bloque: 'Oposición', region: 'La Araucanía', cargo: 'Senador' },
+  { nombre: 'Iván Flores', partido: 'PDC', bloque: 'Oposición', region: 'Los Ríos', cargo: 'Senador' },
+  { nombre: 'Yasna Provoste', partido: 'PDC', bloque: 'Oposición', region: 'Atacama', cargo: 'Senadora' },
+  { nombre: 'Daniel Núñez', partido: 'PC', bloque: 'Oposición', region: 'Coquimbo', cargo: 'Senador' },
+  { nombre: 'Claudia Pascual', partido: 'PC', bloque: 'Oposición', region: 'Metropolitana', cargo: 'Senadora' },
+  { nombre: 'Karol Cariola', partido: 'PC', bloque: 'Oposición', region: 'Valparaíso', cargo: 'Senadora' },
+  { nombre: 'Diego Ibáñez', partido: 'FA', bloque: 'Oposición', region: 'Valparaíso', cargo: 'Senador' },
+  { nombre: 'Beatriz Sánchez', partido: 'FA', bloque: 'Oposición', region: 'La Araucanía', cargo: 'Senadora' },
+  { nombre: 'Esteban Velásquez', partido: 'FREVS', bloque: 'Oposición', region: 'Antofagasta', cargo: 'Senador' },
+  { nombre: 'Miguel Ángel Calisto', partido: 'FREVS', bloque: 'Oposición', region: 'Aysén', cargo: 'Senador (Ind-FRVS)' },
+  { nombre: 'Vlado Mirosevic', partido: 'Liberal', bloque: 'Oposición', region: 'Arica y Parinacota', cargo: 'Senador' },
+  { nombre: 'Fabiola Campillai', partido: 'Independiente', bloque: 'Oposición', region: 'Metropolitana', cargo: 'Senadora' },
+  { nombre: 'Alejandra Sepúlveda', partido: 'Independiente', bloque: 'Oposición', region: 'O\'Higgins', cargo: 'Senadora' },
+  { nombre: 'Karim Bianchi', partido: 'Independiente', bloque: 'Oposición', region: 'Magallanes', cargo: 'Senador' },
+  // OFICIALISMO
+  { nombre: 'Paulina Núñez Urrutia', partido: 'RN', bloque: 'Oficialismo', region: 'Antofagasta', cargo: 'Presidenta del Senado' },
+  { nombre: 'Manuel José Ossandón', partido: 'RN', bloque: 'Oficialismo', region: 'Metropolitana', cargo: 'Senador' },
+  { nombre: 'Andrés Longton', partido: 'RN', bloque: 'Oficialismo', region: 'Valparaíso', cargo: 'Senador' },
+  { nombre: 'Camila Flores', partido: 'RN', bloque: 'Oficialismo', region: 'Valparaíso', cargo: 'Senadora' },
+  { nombre: 'Miguel Becker', partido: 'RN', bloque: 'Oficialismo', region: 'La Araucanía', cargo: 'Senador' },
+  { nombre: 'Andrea Balladares', partido: 'RN', bloque: 'Oficialismo', region: 'La Araucanía', cargo: 'Senadora' },
+  { nombre: 'María José Gatica', partido: 'RN', bloque: 'Oficialismo', region: 'Los Lagos', cargo: 'Senadora' },
+  { nombre: 'Carlos Kuschel', partido: 'RN', bloque: 'Oficialismo', region: 'Los Lagos', cargo: 'Senador' },
+  { nombre: 'Alejandro Kusanovic', partido: 'RN', bloque: 'Oficialismo', region: 'Magallanes', cargo: 'Senador (Ind-RN)' },
+  { nombre: 'Sergio Gahona', partido: 'RN', bloque: 'Oficialismo', region: 'Coquimbo', cargo: 'Senador' },
+  { nombre: 'Rodrigo Galilea', partido: 'RN', bloque: 'Oficialismo', region: 'Maule', cargo: 'Senador' },
+  { nombre: 'Iván Moreira', partido: 'UDI', bloque: 'Oficialismo', region: 'Los Lagos', cargo: 'Vicepresidente del Senado' },
+  { nombre: 'Javier Macaya', partido: 'UDI', bloque: 'Oficialismo', region: 'O\'Higgins', cargo: 'Senador' },
+  { nombre: 'Gustavo Sanhueza', partido: 'UDI', bloque: 'Oficialismo', region: 'Ñuble', cargo: 'Senador' },
+  { nombre: 'Enrique van Rysselberghe', partido: 'UDI', bloque: 'Oficialismo', region: 'Biobío', cargo: 'Senador' },
+  { nombre: 'Renzo Trisotti', partido: 'Republicano', bloque: 'Oficialismo', region: 'Tarapacá', cargo: 'Senador' },
+  { nombre: 'Rodolfo Carter', partido: 'Republicano', bloque: 'Oficialismo', region: 'La Araucanía', cargo: 'Senador (Ind-REP)' },
+  { nombre: 'Cristián Vial', partido: 'Republicano', bloque: 'Oficialismo', region: 'La Araucanía', cargo: 'Senador (Ind-REP)' },
+  { nombre: 'Arturo Squella', partido: 'Republicano', bloque: 'Oficialismo', region: 'Valparaíso', cargo: 'Senador' },
+  { nombre: 'Ignacio Urrutia', partido: 'Republicano', bloque: 'Oficialismo', region: 'La Araucanía', cargo: 'Senador' },
+  { nombre: 'Luciano Cruz-Coke', partido: 'Evópoli', bloque: 'Oficialismo', region: 'Metropolitana', cargo: 'Senador' },
+  { nombre: 'Sebastián Keitel', partido: 'Evópoli', bloque: 'Oficialismo', region: 'Los Lagos', cargo: 'Senador (Ind-EVO)' },
+  { nombre: 'Matías Walker', partido: 'DEM', bloque: 'Oficialismo', region: 'Coquimbo', cargo: 'Senador' },
+  { nombre: 'Enrique Lee', partido: 'DEM', bloque: 'Oficialismo', region: 'Arica y Parinacota', cargo: 'Senador (Ind-DEM)' },
+  { nombre: 'Rojo Edwards', partido: 'Independiente', bloque: 'Oficialismo', region: 'Metropolitana', cargo: 'Senador' },
+  { nombre: 'Benjamín Lorca Inzunza', partido: 'Republicano', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 6 },
+  { nombre: 'Jorge Brito Hasbun', partido: 'FA', bloque: 'Oposición', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Pier Karlezi Hazleby', partido: 'PNL', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Lorena Fries Monleón', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Zandra Parisi Fernández', partido: 'PDG', bloque: 'Independiente', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Macarena Santelices Cañas', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Fernando Zamorano Peralta', partido: 'PPD', bloque: 'Oposición', region: "O'Higgins", distrito: 15 },
+  { nombre: 'Guillermo Valdés Carmona', partido: 'PDG', bloque: 'Independiente', region: 'Maule', distrito: 17 },
+  { nombre: 'Germán Verdugo Soto', partido: 'PNL', bloque: 'Oficialismo', region: 'Maule', distrito: 17 },
+  { nombre: 'Daniel Bustos Leal', partido: 'Republicano', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 18 },
+  { nombre: 'Roberto Arroyo González', partido: 'PS', bloque: 'Oposición', region: 'Biobío', distrito: 20 },
+  { nombre: 'Lilian Betancurt Delgado', partido: 'PDG', bloque: 'Independiente', region: 'Biobío', distrito: 21 },
+  { nombre: 'Flor Contreras Vivallo', partido: 'PDG', bloque: 'Independiente', region: 'La Araucanía', distrito: 23 },
+  { nombre: 'Cristián Neira Martínez', partido: 'Republicano', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 23 },
+  { nombre: 'Daniel Valenzuela', partido: 'RN', bloque: 'Oficialismo', region: 'Los Ríos', distrito: 24 },
+]
+
+export const diputados = [
+  { nombre: 'Luis Malla', partido: 'Liberal', bloque: 'Oposición', region: 'Arica y Parinacota', distrito: 1 },
+  { nombre: 'Jorge Díaz Ibarra', partido: 'PDC', bloque: 'Oposición', region: 'Arica y Parinacota', distrito: 1 },
+  { nombre: 'Stephanie Jéldrez', partido: 'Republicano', bloque: 'Oficialismo', region: 'Arica y Parinacota', distrito: 1 },
+  { nombre: 'Carlos Carvajal Gallardo', partido: 'PPD', bloque: 'Oposición', region: 'Tarapacá', distrito: 2 },
+  { nombre: 'Ximena Naranjo', partido: 'UDI', bloque: 'Oficialismo', region: 'Tarapacá', distrito: 2 },
+  { nombre: 'Álvaro Jofré', partido: 'PNL', bloque: 'Oficialismo', region: 'Tarapacá', distrito: 2 },
+  { nombre: 'Sebastián Videla', partido: 'Liberal', bloque: 'Oposición', region: 'Antofagasta', distrito: 3 },
+  { nombre: 'Jaime Araya Guerrero', partido: 'PPD', bloque: 'Oposición', region: 'Antofagasta', distrito: 3 },
+  { nombre: 'Marcela Hernando', partido: 'PR', bloque: 'Oposición', region: 'Antofagasta', distrito: 3 },
+  { nombre: 'Fabián Ossandón', partido: 'PDG', bloque: 'Independiente', region: 'Antofagasta', distrito: 3 },
+  { nombre: 'Carlo Arqueros', partido: 'Republicano', bloque: 'Oficialismo', region: 'Antofagasta', distrito: 3 },
+  { nombre: 'Juan Santana', partido: 'PS', bloque: 'Oposición', region: 'Atacama', distrito: 4 },
+  { nombre: 'Cristian Tapia Ramos', partido: 'PPD', bloque: 'Oposición', region: 'Atacama', distrito: 4 },
+  { nombre: 'Jaime Mulet', partido: 'FREVS', bloque: 'Oposición', region: 'Atacama', distrito: 4 },
+  { nombre: 'Paula Olmos', partido: 'PDG', bloque: 'Independiente', region: 'Atacama', distrito: 4 },
+  { nombre: 'Ignacio Clement-Lund', partido: 'Republicano', bloque: 'Oficialismo', region: 'Atacama', distrito: 4 },
+  { nombre: 'Daniel Manouchehri', partido: 'PS', bloque: 'Oposición', region: 'Coquimbo', distrito: 5 },
+  { nombre: 'Nathalie Castillo', partido: 'PC', bloque: 'Oposición', region: 'Coquimbo', distrito: 5 },
+  { nombre: 'Carolina Tello', partido: 'FA', bloque: 'Oposición', region: 'Coquimbo', distrito: 5 },
+  { nombre: 'Marco Sulantay', partido: 'UDI', bloque: 'Oficialismo', region: 'Coquimbo', distrito: 5 },
+  { nombre: 'Eileen Urquieta', partido: 'PDG', bloque: 'Independiente', region: 'Coquimbo', distrito: 5 },
+  { nombre: 'Erich Grohs', partido: 'PNL', bloque: 'Oficialismo', region: 'Coquimbo', distrito: 5 },
+  { nombre: 'Nelson Venegas Salazar', partido: 'PS', bloque: 'Oposición', region: 'Valparaíso', distrito: 6 },
+  { nombre: 'Sofía González Cortés', partido: 'PC', bloque: 'Oposición', region: 'Valparaíso', distrito: 6 },
+  { nombre: 'Cristian Mella', partido: 'PDC', bloque: 'Oposición', region: 'Valparaíso', distrito: 6 },
+  { nombre: 'María Francisca Bello', partido: 'FA', bloque: 'Oposición', region: 'Valparaíso', distrito: 6 },
+  { nombre: 'Chiara Barchiesi', partido: 'Republicano', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 6 },
+  { nombre: 'Luis Pardo Sainz', partido: 'RN', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 6 },
+  { nombre: 'Javier Olivares', partido: 'PDG', bloque: 'Independiente', region: 'Valparaíso', distrito: 6 },
+  { nombre: 'Jaime Bassa', partido: 'FA', bloque: 'Oposición', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Luis Cuello', partido: 'PC', bloque: 'Oposición', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Luis Sánchez Ossa', partido: 'Republicano', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Hotuiti Teao', partido: 'UDI', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Andrés Celis', partido: 'RN', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Juan Marcelo Valenzuela', partido: 'PDG', bloque: 'Independiente', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Gustavo Gatica', partido: 'PC', bloque: 'Oposición', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Marcos Barraza', partido: 'PC', bloque: 'Oposición', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Tatiana Urrutia', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Agustín Romero', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Cristián Contreras Radovic', partido: 'PDG', bloque: 'Independiente', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Mario Olavarría', partido: 'UDI', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Carlos Cuadrado Prats', partido: 'PPD', bloque: 'Oposición', region: 'Metropolitana', distrito: 9 },
+  { nombre: 'Boris Barrera', partido: 'PC', bloque: 'Oposición', region: 'Metropolitana', distrito: 9 },
+  { nombre: 'César Valenzuela Maass', partido: 'PS', bloque: 'Oposición', region: 'Metropolitana', distrito: 9 },
+  { nombre: 'José Carlos Meza', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 9 },
+  { nombre: 'Tamara Ramírez', partido: 'PDG', bloque: 'Independiente', region: 'Metropolitana', distrito: 9 },
+  { nombre: 'Guillermo Ramírez Diez', partido: 'UDI', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 9 },
+  { nombre: 'Gonzalo Winter', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Irací Hassler', partido: 'PC', bloque: 'Oposición', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'José Antonio Kast Adriasola', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Hans Marowski', partido: 'PNL', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Francisco Orrego Gutiérrez', partido: 'RN', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Jorge Alessandri Vergara', partido: 'UDI', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Diego Schalper', partido: 'RN', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 11 },
+  { nombre: 'Constanza Hube', partido: 'UDI', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 11 },
+  { nombre: 'Catalina del Real', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 11 },
+  { nombre: 'Constanza Schönhaut', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 11 },
+  { nombre: 'Álvaro Carter', partido: 'Republicano', bloque: 'Oficialismo', region: 'O\'Higgins', distrito: 12 },
+  { nombre: 'Pamela Jiles', partido: 'PDG', bloque: 'Independiente', region: 'O\'Higgins', distrito: 12 },
+  { nombre: 'Ana María Gazmuri', partido: 'AH', bloque: 'Oposición', region: 'O\'Higgins', distrito: 12 },
+  { nombre: 'Ximena Ossandón', partido: 'RN', bloque: 'Oficialismo', region: 'O\'Higgins', distrito: 12 },
+  { nombre: 'Daniela Serrano', partido: 'PC', bloque: 'Oposición', region: 'O\'Higgins', distrito: 12 },
+  { nombre: 'Gael Yeomans', partido: 'FA', bloque: 'Oposición', region: 'Maule', distrito: 13 },
+  { nombre: 'Lorena Pizarro', partido: 'PC', bloque: 'Oposición', region: 'Maule', distrito: 13 },
+  { nombre: 'Felipe Ross', partido: 'Republicano', bloque: 'Oficialismo', region: 'Maule', distrito: 13 },
+  { nombre: 'Eduardo Durán', partido: 'RN', bloque: 'Oficialismo', region: 'Maule', distrito: 13 },
+  { nombre: 'Ignacio Achurra', partido: 'FA', bloque: 'Oposición', region: 'Maule', distrito: 14 },
+  { nombre: 'Marisela Santibáñez', partido: 'PC', bloque: 'Oposición', region: 'Maule', distrito: 14 },
+  { nombre: 'Raúl Leiva', partido: 'PS', bloque: 'Oposición', region: 'Maule', distrito: 14 },
+  { nombre: 'Diego Vergara', partido: 'Republicano', bloque: 'Oficialismo', region: 'Maule', distrito: 14 },
+  { nombre: 'Jaime Coloma', partido: 'UDI', bloque: 'Oficialismo', region: 'Maule', distrito: 14 },
+  { nombre: 'Raúl Soto', partido: 'PPD', bloque: 'Oposición', region: 'Ñuble', distrito: 15 },
+  { nombre: 'Valentina Cáceres', partido: 'FA', bloque: 'Oposición', region: 'Ñuble', distrito: 15 },
+  { nombre: 'Natalia Romero', partido: 'UDI', bloque: 'Oficialismo', region: 'Ñuble', distrito: 15 },
+  { nombre: 'Fernando Ugarte Tejeda', partido: 'Republicano', bloque: 'Oficialismo', region: 'Ñuble', distrito: 15 },
+  { nombre: 'Carolina Cucumides', partido: 'PS', bloque: 'Oposición', region: 'Biobío', distrito: 16 },
+  { nombre: 'Félix Bugueño', partido: 'FA', bloque: 'Oposición', region: 'Biobío', distrito: 16 },
+  { nombre: 'Ricardo Neumann', partido: 'UDI', bloque: 'Oficialismo', region: 'Biobío', distrito: 16 },
+  { nombre: 'Sebastián Cristoffanini', partido: 'Republicano', bloque: 'Oficialismo', region: 'Biobío', distrito: 16 },
+  { nombre: 'Priscilla Castillo', partido: 'PDC', bloque: 'Oposición', region: 'Biobío', distrito: 17 },
+  { nombre: 'Roberto Celedón', partido: 'FA', bloque: 'Oposición', region: 'Biobío', distrito: 17 },
+  { nombre: 'Benjamín Moreno Bascur', partido: 'Republicano', bloque: 'Oficialismo', region: 'Biobío', distrito: 17 },
+  { nombre: 'Jorge Guzmán Zepeda', partido: 'Evópoli', bloque: 'Oficialismo', region: 'Biobío', distrito: 17 },
+  { nombre: 'Cristián Menchaca Munita', partido: 'Republicano', bloque: 'Oficialismo', region: 'Maule', distrito: 18 },
+  { nombre: 'Consuelo Veloso Ávila', partido: 'PR', bloque: 'Oposición', region: 'Maule', distrito: 18 },
+  { nombre: 'Rodrigo Ramírez Parra', partido: 'RN', bloque: 'Oficialismo', region: 'Maule', distrito: 18 },
+  { nombre: 'Cristóbal Martínez', partido: 'UDI', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 19 },
+  { nombre: 'Carlos Chandía', partido: 'RN', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 19 },
+  { nombre: 'Felipe Camaño', partido: 'PDC', bloque: 'Oposición', region: 'La Araucanía', distrito: 19 },
+  { nombre: 'Francisco Crisóstomo', partido: 'PS', bloque: 'Oposición', region: 'La Araucanía', distrito: 19 },
+  { nombre: 'Sara Concha', partido: 'Independiente', bloque: 'Oficialismo', region: 'La Araucanía', distrito: 19 },
+  { nombre: 'Francesca Muñoz', partido: 'Republicano', bloque: 'Oficialismo', region: 'Los Ríos', distrito: 20 },
+  { nombre: 'Paz Charpentier', partido: 'Republicano', bloque: 'Oficialismo', region: 'Los Ríos', distrito: 20 },
+  { nombre: 'Marlene Pérez', partido: 'UDI', bloque: 'Oficialismo', region: 'Los Ríos', distrito: 20 },
+  { nombre: 'Álvaro Ortiz Vera', partido: 'PDC', bloque: 'Oposición', region: 'Los Ríos', distrito: 20 },
+  { nombre: 'Antonio Rivas Villalobos', partido: 'PS', bloque: 'Oposición', region: 'Los Ríos', distrito: 20 },
+  { nombre: 'Patricio Briones', partido: 'PDG', bloque: 'Independiente', region: 'Los Ríos', distrito: 20 },
+  { nombre: 'Flor Weisse', partido: 'UDI', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 21 },
+  { nombre: 'Joanna Pérez', partido: 'DEM', bloque: 'Oposición', region: 'Los Lagos', distrito: 21 },
+  { nombre: 'Cristóbal Urruticoechea', partido: 'PNL', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 21 },
+  { nombre: 'Patricio Pinilla', partido: 'PDC', bloque: 'Oposición', region: 'Los Lagos', distrito: 21 },
+  { nombre: 'Eduardo Cretton', partido: 'UDI', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 22 },
+  { nombre: 'Juan Carlos Beltrán', partido: 'RN', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 22 },
+  { nombre: 'Gloria Naveillán', partido: 'PNL', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 22 },
+  { nombre: 'Andrea Parra', partido: 'PPD', bloque: 'Oposición', region: 'Los Lagos', distrito: 22 },
+  { nombre: 'José Montalva', partido: 'PPD', bloque: 'Oposición', region: 'Aysén', distrito: 23 },
+  { nombre: 'Coca Ñanco Vásquez', partido: 'FA', bloque: 'Oposición', region: 'Aysén', distrito: 23 },
+  { nombre: 'Stephan Schubert', partido: 'Republicano', bloque: 'Oficialismo', region: 'Aysén', distrito: 23 },
+  { nombre: 'Tomás Kast', partido: 'Evópoli', bloque: 'Oficialismo', region: 'Aysén', distrito: 23 },
+  { nombre: 'René Manuel García', partido: 'RN', bloque: 'Oficialismo', region: 'Aysén', distrito: 23 },
+  { nombre: 'Marcos Ilabaca', partido: 'PS', bloque: 'Oposición', region: 'Los Ríos', distrito: 24 },
+  { nombre: 'Matías Fernández Hartwig', partido: 'FA', bloque: 'Oposición', region: 'Los Ríos', distrito: 24 },
+  { nombre: 'Omar Sabat', partido: 'UDI', bloque: 'Oficialismo', region: 'Los Ríos', distrito: 24 },
+  { nombre: 'Leandro Kunstmann', partido: 'Republicano', bloque: 'Oficialismo', region: 'Los Ríos', distrito: 24 },
+  { nombre: 'Héctor Barría', partido: 'PDC', bloque: 'Oposición', region: 'Los Lagos', distrito: 25 },
+  { nombre: 'Emilia Nuyado', partido: 'PS', bloque: 'Oposición', region: 'Los Lagos', distrito: 25 },
+  { nombre: 'Daniel Lilayu', partido: 'UDI', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 25 },
+  { nombre: 'Paulina Muñoz', partido: 'PNL', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 25 },
+  { nombre: 'Alejandro Bernales', partido: 'Liberal', bloque: 'Oposición', region: 'Magallanes', distrito: 26 },
+  { nombre: 'Héctor Ulloa', partido: 'PPD', bloque: 'Oposición', region: 'Magallanes', distrito: 26 },
+  { nombre: 'Mauro González Villarroel', partido: 'RN', bloque: 'Oficialismo', region: 'Magallanes', distrito: 26 },
+  { nombre: 'Claudia Reyes Larenas', partido: 'Republicano', bloque: 'Oficialismo', region: 'Magallanes', distrito: 26 },
+  { nombre: 'Álex Nahuelquín', partido: 'PDG', bloque: 'Independiente', region: 'Magallanes', distrito: 26 },
+  { nombre: 'Andrea Macías', partido: 'PS', bloque: 'Oposición', region: 'Aysén', distrito: 27 },
+  { nombre: 'René Alinco', partido: 'FREVS', bloque: 'Oposición', region: 'Aysén', distrito: 27 },
+  { nombre: 'Alejandra Valdebenito', partido: 'UDI', bloque: 'Oficialismo', region: 'Aysén', distrito: 27 },
+  { nombre: 'Carlos Bianchi', partido: 'Independiente', bloque: 'Independiente', region: 'Magallanes', distrito: 28 },
+  { nombre: 'Alejandro Riquelme', partido: 'Republicano', bloque: 'Oficialismo', region: 'Magallanes', distrito: 28 },
+  { nombre: 'Javiera Morales', partido: 'FA', bloque: 'Oposición', region: 'Magallanes', distrito: 28 },
+  // Distrito 5 faltantes
+  // Distrito 12 faltante
+  { nombre: 'Benjamín Lorca', partido: 'Independiente', bloque: 'Oposición', region: 'O\'Higgins', distrito: 12 },
+  { nombre: 'Javiera Rodríguez Pascual', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 9 },
+  { nombre: 'Claudia Mora Vega', partido: 'RN', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 11 },
+  { nombre: 'Cristián Araya', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 11 },
+  { nombre: 'Álvaro Carter Fernández', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Pamela Jiles Moreno', partido: 'PDG', bloque: 'Independiente', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Ana María Gazmuri', partido: 'AH', bloque: 'Oposición', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Ximena Ossandón', partido: 'RN', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Daniela Serrano Salazar', partido: 'PC', bloque: 'Oposición', region: 'Metropolitana', distrito: 12 },
+  { nombre: 'Valentina Becerra Peña', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 13 },
+
+  { nombre: 'Emilia Schneider Videla', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Enrique Bassaletti Riess', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Javier Muñoz Riquelme', partido: 'PDC', bloque: 'Oposición', region: 'Maule', distrito: 17 },
+  { nombre: 'Sergio Bobadilla Muñoz', partido: 'UDI', bloque: 'Oficialismo', region: 'Biobío', distrito: 20 },
+  { nombre: 'Daniel Valenzuela Vásquez', partido: 'RN', bloque: 'Oficialismo', region: 'Los Ríos', distrito: 24 },
+
+  { nombre: 'Sebastián Zamora Soto', partido: 'Republicano', bloque: 'Oficialismo', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Juan Irarrázaval Rossel', partido: 'Republicano', bloque: 'Oficialismo', region: 'Maule', distrito: 14 },
+
+
+  { nombre: 'Pier Karlezi Hazleby', partido: 'PNL', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 8 },
+  { nombre: 'Lorena Fries Monleón', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 10 },
+  { nombre: 'Jorge Brito Hasbun', partido: 'FA', bloque: 'Oposición', region: 'Valparaíso', distrito: 7 },
+  { nombre: 'Fernando Zamorano Peralta', partido: 'PPD', bloque: 'Oposición', region: 'Valparaíso', distrito: 15 },
+  { nombre: 'Guillermo Valdés Carmona', partido: 'PDG', bloque: 'Independiente', region: 'Maule', distrito: 17 },
+  { nombre: 'Germán Verdugo Soto', partido: 'PNL', bloque: 'Oficialismo', region: 'Maule', distrito: 17 },
+  { nombre: 'Daniel Bustos Leal', partido: 'Republicano', bloque: 'Oficialismo', region: 'Maule', distrito: 18 },
+  { nombre: 'Lilian Betancurt Delgado', partido: 'PDG', bloque: 'Independiente', region: 'Biobío', distrito: 21 },
+  { nombre: 'Flor Contreras Vivallo', partido: 'PDG', bloque: 'Independiente', region: 'La Araucanía', distrito: 23 },]
