@@ -2,23 +2,37 @@ import { useState } from 'react'
 import { diputados, PARTIDO_COLORS } from '../data'
 
 const REGIONES = [...new Set(diputados.map(d => d.region))].sort()
-const PARTIDOS = [...new Set(diputados.map(d => d.partido))].sort()
+const PARTIDOS_UNICOS = [...new Set(diputados.map(d => d.partido))].sort()
 const DISTRITOS = [...new Set(diputados.map(d => d.distrito))].sort((a,b) => a-b)
 
-const opList  = diputados.filter(d => d.bloque === 'Oposición')
-const ofList  = diputados.filter(d => d.bloque === 'Oficialismo')
+// Agrupar por partido para el hemiciclo (partidos juntos)
+const ORDEN_PARTIDOS_OP = ['PS', 'PPD', 'PDC', 'PC', 'FA', 'FREVS', 'Liberal', 'AH', 'DEM']
+const ORDEN_PARTIDOS_OF = ['RN', 'UDI', 'Republicano', 'Evópoli', 'PNL', 'PSC']
+
+function agruparPorPartido(lista, ordenPartidos) {
+  const result = []
+  ordenPartidos.forEach(p => {
+    lista.filter(d => d.partido === p).forEach(d => result.push(d))
+  })
+  // Agregar los que no están en el orden definido
+  lista.filter(d => !ordenPartidos.includes(d.partido)).forEach(d => result.push(d))
+  return result
+}
+
+const opList = agruparPorPartido(diputados.filter(d => d.bloque === 'Oposición'), ORDEN_PARTIDOS_OP)
+const ofList = agruparPorPartido(diputados.filter(d => d.bloque === 'Oficialismo'), ORDEN_PARTIDOS_OF)
 const indList = diputados.filter(d => d.bloque === 'Independiente')
 
-// Rows: 22+27+31+33+34 = 147  op:9+11+14+15+15=64  ind:2+3+3+3+2=13  of:11+13+14+15+17=70
+// Rows: 24+29+33+34+35 = 155  op:10+12+14+15+14=65  ind:3+3+3+3+3=15  of:11+14+16+16+18=75
 const ROWS = [
-  { r: 80,  total: 22, op: 9,  ind: 2 },
-  { r: 110, total: 27, op: 11, ind: 3 },
-  { r: 140, total: 31, op: 14, ind: 3 },
-  { r: 170, total: 33, op: 15, ind: 3 },
-  { r: 200, total: 34, op: 15, ind: 2 },
+  { r: 80,  total: 24, op: 10, ind: 3 },
+  { r: 110, total: 29, op: 12, ind: 3 },
+  { r: 140, total: 33, op: 14, ind: 3 },
+  { r: 170, total: 34, op: 15, ind: 3 },
+  { r: 200, total: 35, op: 14, ind: 3 },
 ]
 
-const cx = 380, cy = 330
+const cx = 390, cy = 340
 
 function buildCircles() {
   const circles = []
@@ -60,7 +74,7 @@ export default function Diputados() {
       && (filtroDistrito === 'Todos' || d.distrito === parseInt(filtroDistrito))
   })
 
-  const porPartido = PARTIDOS.map(p => ({
+  const porPartido = PARTIDOS_UNICOS.map(p => ({
     partido: p,
     count: diputados.filter(d => d.partido === p).length,
     color: PARTIDO_COLORS[p] || '#94a3b8'
@@ -86,14 +100,14 @@ export default function Diputados() {
       {/* HEMICICLO */}
       <div style={styles.card}>
         <div style={styles.cardTitle}>Hemiciclo de la Cámara de Diputadas y Diputados</div>
-        <div style={styles.cardSubtitle}>Haz clic en un escaño para ver al diputado · Oposición izquierda · Oficialismo derecha</div>
+        <div style={styles.cardSubtitle}>Haz clic en un escaño para ver al diputado · Partidos agrupados · Oposición izquierda · Oficialismo derecha</div>
 
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start' }}>
           <div style={{ overflowX: 'auto' }}>
-            <svg width="760" height="345" viewBox="0 0 760 345" style={{ overflow: 'visible' }}>
-              <path d={`M ${cx-215} ${cy} A 215 215 0 0 1 ${cx+215} ${cy}`}
+            <svg width="780" height="355" viewBox="0 0 780 355" style={{ overflow: 'visible' }}>
+              <path d={`M ${cx-225} ${cy} A 225 225 0 0 1 ${cx+225} ${cy}`}
                 fill="none" stroke="#e2e8f0" strokeWidth="2" />
-              <line x1={cx} y1={cy-70} x2={cx} y2={cy-210}
+              <line x1={cx} y1={cy-70} x2={cx} y2={cy-220}
                 stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="5,3" />
 
               {circles.map(({ x, y, d, id }) => (
@@ -107,28 +121,33 @@ export default function Diputados() {
                 />
               ))}
 
-              <text x="65" y="320" fill="#1e40af" fontSize="11" textAnchor="middle" fontWeight="700">OPOSICIÓN</text>
-              <text x="65" y="332" fill="#64748b" fontSize="10" textAnchor="middle">{opList.length} escaños</text>
-              <text x="695" y="320" fill="#b45309" fontSize="11" textAnchor="middle" fontWeight="700">OFICIALISMO</text>
-              <text x="695" y="332" fill="#64748b" fontSize="10" textAnchor="middle">{ofList.length} escaños</text>
-              <text x={cx} y="320" fill="#0f172a" fontSize="13" textAnchor="middle" fontWeight="700">{diputados.length}</text>
-              <text x={cx} y="332" fill="#64748b" fontSize="10" textAnchor="middle">escaños</text>
+              <text x="70" y="332" fill="#1e40af" fontSize="11" textAnchor="middle" fontWeight="700">OPOSICIÓN</text>
+              <text x="70" y="344" fill="#64748b" fontSize="10" textAnchor="middle">{opList.length} escaños</text>
+              <text x="710" y="332" fill="#b45309" fontSize="11" textAnchor="middle" fontWeight="700">OFICIALISMO</text>
+              <text x="710" y="344" fill="#64748b" fontSize="10" textAnchor="middle">{ofList.length} escaños</text>
+              <text x={cx} y="332" fill="#0f172a" fontSize="13" textAnchor="middle" fontWeight="700">{diputados.length}</text>
+              <text x={cx} y="344" fill="#64748b" fontSize="10" textAnchor="middle">escaños</text>
             </svg>
           </div>
 
           {/* Panel info */}
-          <div style={{ width: 200, paddingTop: 20, flexShrink: 0 }}>
+          <div style={{ width: 210, paddingTop: 20, flexShrink: 0 }}>
             {sel ? (
               <div style={styles.infoCard}>
                 <div style={{ ...styles.partidoBadge, background: PARTIDO_COLORS[sel.partido] || '#94a3b8' }}>
                   {sel.partido}
                 </div>
                 <div style={styles.infoNombre}>{sel.nombre}</div>
-                <div style={styles.infoRegion}>📍 {sel.region}</div>
-                <div style={styles.infoDistrito}>Distrito {sel.distrito}</div>
+                <div style={styles.infoSub}>📍 {sel.region}</div>
+                <div style={styles.infoSub}>Distrito {sel.distrito}</div>
                 <div style={{ ...styles.infoBloque, color: sel.bloque === 'Oficialismo' ? '#b45309' : sel.bloque === 'Oposición' ? '#1e40af' : '#6b7280' }}>
                   {sel.bloque === 'Oficialismo' ? '🔵' : sel.bloque === 'Oposición' ? '🔴' : '⚪'} {sel.bloque}
                 </div>
+                {sel.votos && (
+                  <div style={styles.infoVotos}>
+                    🗳 {sel.votos.toLocaleString('es-CL')} votos · {sel.porcentaje}
+                  </div>
+                )}
                 <button onClick={() => setSel(null)} style={styles.closeBtn}>✕ Cerrar</button>
               </div>
             ) : (
@@ -146,7 +165,7 @@ export default function Diputados() {
             .filter(([p]) => diputados.some(d => d.partido === p))
             .map(([partido, color]) => (
               <div key={partido} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#475569' }}>
-                <div style={{ width: 9, height: 9, borderRadius: '50%', background: color }} />
+                <div style={{ width: 9, height: 9, borderRadius: '50%', background: color, border: color === '#e5e7eb' ? '1px solid #ccc' : 'none' }} />
                 {partido}
               </div>
             ))}
@@ -187,7 +206,7 @@ export default function Diputados() {
           </select>
           <select value={filtroPartido} onChange={e => setFiltroPartido(e.target.value)} style={styles.select}>
             <option value="Todos">Todos los partidos</option>
-            {PARTIDOS.map(p => <option key={p}>{p}</option>)}
+            {PARTIDOS_UNICOS.map(p => <option key={p}>{p}</option>)}
           </select>
           <select value={filtroRegion} onChange={e => setFiltroRegion(e.target.value)} style={styles.select}>
             <option value="Todas">Todas las regiones</option>
@@ -205,7 +224,8 @@ export default function Diputados() {
             <div>Partido</div>
             <div>Bloque</div>
             <div>Región</div>
-            <div>Distrito</div>
+            <div>D°</div>
+            <div>Votos</div>
           </div>
           {filtrados.map((d, i) => (
             <div key={i} style={{ ...styles.tableRow, background: i % 2 === 0 ? 'white' : '#f8fafc' }}>
@@ -220,6 +240,7 @@ export default function Diputados() {
               </div>
               <div style={{ color: '#64748b', fontSize: 12 }}>{d.region}</div>
               <div style={{ color: '#94a3b8', fontSize: 12 }}>D{d.distrito}</div>
+              <div style={{ color: '#64748b', fontSize: 11 }}>{d.votos?.toLocaleString('es-CL')} ({d.porcentaje})</div>
             </div>
           ))}
         </div>
@@ -237,13 +258,13 @@ const styles = {
   cardTitle: { fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 },
   cardSubtitle: { fontSize: 12, color: '#94a3b8', marginBottom: 16 },
   infoCard: { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px 14px' },
-  emptyPanel: { height: 140, border: '1.5px dashed #e2e8f0', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
+  emptyPanel: { height: 160, border: '1.5px dashed #e2e8f0', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
   partidoBadge: { display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, color: 'white', marginBottom: 8 },
-  infoNombre: { fontSize: 14, fontWeight: 700, color: '#0f172a', lineHeight: 1.3, marginBottom: 4 },
-  infoRegion: { fontSize: 12, color: '#475569', marginBottom: 4 },
-  infoDistrito: { fontSize: 11, color: '#64748b', marginBottom: 4 },
-  infoBloque: { fontSize: 11, fontWeight: 700, marginBottom: 10 },
-  closeBtn: { background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '5px 12px', color: '#64748b', cursor: 'pointer', fontSize: 11, width: '100%' },
+  infoNombre: { fontSize: 13, fontWeight: 700, color: '#0f172a', lineHeight: 1.3, marginBottom: 6 },
+  infoSub: { fontSize: 12, color: '#475569', marginBottom: 3 },
+  infoBloque: { fontSize: 11, fontWeight: 700, marginBottom: 6, marginTop: 4 },
+  infoVotos: { fontSize: 12, color: '#059669', fontWeight: 600, background: '#f0fdf4', padding: '4px 8px', borderRadius: 6, marginBottom: 10 },
+  closeBtn: { background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '5px 12px', color: '#64748b', cursor: 'pointer', fontSize: 11, width: '100%', marginTop: 4 },
   filtersRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 },
   input: { flex: 2, padding: '8px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 14, fontFamily: "'Inter', sans-serif", minWidth: 180 },
   select: { padding: '8px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: "'Inter', sans-serif", background: 'white', color: '#475569' },
