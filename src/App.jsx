@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Senado from './components/Senado'
 import Diputados from './components/Diputados'
+import SimuladorQuorum from './components/SimuladorQuorum'
 
 export default function App() {
   const [tab, setTab] = useState('senado')
@@ -26,13 +27,18 @@ export default function App() {
               style={{ ...styles.tabBtn, ...(tab === 'diputados' ? styles.tabActive : styles.tabInactive) }}>
               🏢 Cámara de Diputados
             </button>
+            <button
+              onClick={() => setTab('simulador')}
+              style={{ ...styles.tabBtn, ...(tab === 'simulador' ? { ...styles.tabActive, background: '#7c3aed' } : styles.tabInactive) }}>
+              ⚖️ Simulador de Quórums
+            </button>
           </div>
         </div>
       </header>
 
       {/* CONTENT */}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 20px 60px' }}>
-        {tab === 'senado' ? <Senado /> : <Diputados />}
+        {tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : <SimuladorQuorum />}
       </main>
     </div>
   )
