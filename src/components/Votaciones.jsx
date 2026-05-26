@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { PARTIDO_COLORS } from '../data'
 
-const OPCION_LABELS = { 'Si': 'A favor', 'No': 'En contra', 'Abstencion': 'Abstención', 'Pareo': 'Pareado', 'Dispensado': 'Dispensado' }
-const OPCION_COLORS = { 'Si': '#10b981', 'No': '#ef4444', 'Abstencion': '#f59e0b', 'Pareo': '#94a3b8', 'Dispensado': '#e2e8f0' }
+const OPCION_LABELS = { 'Afirmativo': 'A favor', 'En Contra': 'En contra', 'Abstencion': 'Abstención', 'Pareo': 'Pareado', 'Dispensado': 'Dispensado' }
+const OPCION_COLORS = { 'Afirmativo': '#10b981', 'En Contra': '#ef4444', 'Abstencion': '#f59e0b', 'Pareo': '#94a3b8', 'Dispensado': '#e2e8f0' }
 
 export default function Votaciones() {
   const [modo, setModo] = useState('boletin')
@@ -82,8 +82,8 @@ export default function Votaciones() {
     detalle.votos.forEach(v => {
       const p = v.partido || 'Sin partido'
       if (!map[p]) map[p] = { Si: 0, No: 0, Abstencion: 0, otros: 0 }
-      if (v.opcion === 'Si') map[p].Si++
-      else if (v.opcion === 'No') map[p].No++
+      if (v.opcion === 'Afirmativo') map[p].Si++
+      else if (v.opcion === 'En Contra') map[p].No++
       else if (v.opcion === 'Abstencion') map[p].Abstencion++
       else map[p].otros++
     })
@@ -167,7 +167,7 @@ export default function Votaciones() {
           <div style={S.title}>{votaciones.length} votación{votaciones.length !== 1 ? 'es' : ''}</div>
           <div style={{ marginTop: 12 }}>
             {votaciones.map((v, i) => {
-              const total = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbstencion || 0)
+              const total = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbs || 0)
               return (
                 <div key={v.id || i} onClick={() => cargarDetalle(v)}
                   style={{
@@ -190,12 +190,12 @@ export default function Votaciones() {
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <div style={{ flex: 1, height: 8, borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', display: 'flex' }}>
                         {v.totalSi > 0 && <div style={{ width: `${(v.totalSi/total)*100}%`, background: '#10b981' }} />}
-                        {v.totalAbstencion > 0 && <div style={{ width: `${(v.totalAbstencion/total)*100}%`, background: '#f59e0b' }} />}
+                        {v.totalAbs > 0 && <div style={{ width: `${(v.totalAbs/total)*100}%`, background: '#f59e0b' }} />}
                         {v.totalNo > 0 && <div style={{ width: `${(v.totalNo/total)*100}%`, background: '#ef4444' }} />}
                       </div>
                       <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✓{v.totalSi}</span>
                       <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>✗{v.totalNo}</span>
-                      {v.totalAbstencion > 0 && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>~{v.totalAbstencion}</span>}
+                      {v.totalAbs > 0 && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>~{v.totalAbs}</span>}
                     </div>
                   )}
                 </div>
@@ -222,7 +222,7 @@ export default function Votaciones() {
                 {[
                   { label: 'A favor', value: detalle.resumen?.si, color: '#10b981', icon: '✓' },
                   { label: 'En contra', value: detalle.resumen?.no, color: '#ef4444', icon: '✗' },
-                  { label: 'Abstención', value: detalle.resumen?.abstencion, color: '#f59e0b', icon: '~' },
+                  { label: 'Abstención', value: detalle.resumen?.abs, color: '#f59e0b', icon: '~' },
                 ].map(s => (
                   <div key={s.label} style={{ background: `${s.color}15`, border: `1.5px solid ${s.color}30`, borderRadius: 10, padding: '12px 20px', textAlign: 'center', flex: 1, minWidth: 80 }}>
                     <div style={{ fontSize: 26, fontWeight: 700, color: s.color }}>{s.icon} {s.value ?? 0}</div>
@@ -234,8 +234,8 @@ export default function Votaciones() {
               {/* Barra global */}
               {detalle.votos.length > 0 && (() => {
                 const t = detalle.votos.length
-                const si = detalle.votos.filter(v => v.opcion === 'Si').length
-                const no = detalle.votos.filter(v => v.opcion === 'No').length
+                const si = detalle.votos.filter(v => v.opcion === 'Afirmativo').length
+                const no = detalle.votos.filter(v => v.opcion === 'En Contra').length
                 const abs = detalle.votos.filter(v => v.opcion === 'Abstencion').length
                 return (
                   <div style={{ height: 12, borderRadius: 10, overflow: 'hidden', display: 'flex', marginBottom: 16 }}>
@@ -279,8 +279,8 @@ export default function Votaciones() {
                   onChange={e => setBusqueda(e.target.value)} style={{ ...S.input, flex: 2, minWidth: 160 }} />
                 <select value={filtroOpcion} onChange={e => setFiltroOpcion(e.target.value)} style={S.select}>
                   <option value="Todos">Todos los votos</option>
-                  <option value="Si">A favor</option>
-                  <option value="No">En contra</option>
+                  <option value="Afirmativo">A favor</option>
+                  <option value="En Contra">En contra</option>
                   <option value="Abstencion">Abstención</option>
                 </select>
                 <select value={filtroPartido} onChange={e => setFiltroPartido(e.target.value)} style={S.select}>
