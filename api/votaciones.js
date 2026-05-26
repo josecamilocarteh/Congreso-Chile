@@ -7,7 +7,6 @@ export default async function handler(req, res) {
 
   try {
     let url = '', tipo = ''
-
     if (votacionId)    { url = `${BASE}/getVotacion_Detalle?prmVotacionId=${votacionId}`;  tipo = 'detalle'  }
     else if (boletin)  { url = `${BASE}/getVotaciones_Boletin?prmBoletin=${boletin}`;       tipo = 'boletin'  }
     else if (sesionId) { url = `${BASE}/getSesion_Detalle?prmSesionId=${sesionId}`;         tipo = 'sesion'   }
@@ -18,130 +17,119 @@ export default async function handler(req, res) {
     if (!response.ok) return res.status(502).json({ error: `Error API Cámara: ${response.status}` })
 
     const xml = await response.text()
-    return res.status(200).json(parsear(xml, tipo, fecha))
+    // Strip all XML tags to get plain text, then parse
+    const texto = xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    return res.status(200).json(parsear(texto, tipo, fecha))
 
   } catch (e) {
     return res.status(500).json({ error: e.message })
   }
 }
 
-// Extraer texto de un tag XML
-function tag(str, name) {
-  const m = str.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, 'i'))
-  return m ? m[1].trim() : ''
-}
-function tagAll(str, name) {
-  const re = new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, 'gi')
-  const out = []; let m
-  while ((m = re.exec(str)) !== null) out.push(m[1].trim())
-  return out
-}
-
-// Parsear votos en texto plano: "1012 Boris Barrera Moreno Afirmativo"
-function parsearVotosTexto(texto) {
-  const OPCIONES = ['Afirmativo', 'En Contra', 'Abstencion', 'No Vota', 'Dispensado', 'Pareo']
-  const votos = []
-  // Cada voto empieza con un número (ID)
-  const lineas = texto.split(/(?=\d{3,4}\s+[A-ZÁÉÍÓÚÑÜ])/)
-  for (const linea of lineas) {
-    const l = linea.trim()
-    if (!l) continue
-    let opcionEncontrada = null
-    let resto = l
-    for (const op of OPCIONES) {
-      if (l.includes(op)) {
-        opcionEncontrada = op
-        resto = l.substring(0, l.lastIndexOf(op)).trim()
-        break
-      }
-    }
-    if (!opcionEncontrada) continue
-    // resto = "1012 Boris Barrera Moreno"
-    const partes = resto.split(/\s+/)
-    if (partes.length < 2) continue
-    const id = partes[0]
-    const nombre = partes.slice(1).join(' ')
-    votos.push({ id, diputado: nombre, opcion: opcionEncontrada })
-  }
-  return votos
-}
-
-function parsear(xml, tipo, fechaFiltro) {
-
-  if (tipo === 'boletin') {
-    const votaciones = tagAll(xml, 'Votacion').map(v => ({
-      id:          tag(v, 'Id'),
-      descripcion: tag(v, 'Descripcion'),
-      fecha:       tag(v, 'Fecha').split('T')[0],
-      totalSi:     parseInt(tag(v, 'TotalSi'))          || 0,
-      totalNo:     parseInt(tag(v, 'TotalNo'))           || 0,
-      totalAbs:    parseInt(tag(v, 'TotalAbstencion'))   || 0,
-      totalDisp:   parseInt(tag(v, 'TotalDispensado'))   || 0,
-      quorum:      tag(v, 'Quorum'),
-      resultado:   tag(v, 'Resultado'),
-    }))
-    return { tipo: 'boletin', votaciones }
-  }
+function parsear(texto, tipo, fechaFiltro) {
 
   if (tipo === 'detalle') {
-    const descripcion = tag(xml, 'Descripcion')
-    const fecha       = tag(xml, 'Fecha').split('T')[0]
-    const totalSi     = parseInt(tag(xml, 'TotalSi'))        || 0
-    const totalNo     = parseInt(tag(xml, 'TotalNo'))         || 0
-    const totalAbs    = parseInt(tag(xml, 'TotalAbstencion')) || 0
+    // Extraer totales: 4 números seguidos antes del primer ID de diputado
+    const mTotales = texto.match(/\b(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?=\d{3,4}\s+[A-ZÁÉÍÓÚÑÜ])/)
+    const totalSi  = mTotales ? parseInt(mTotales[1]) : 0
+    const totalNo  = mTotales ? parseInt(mTotales[2]) : 0
+    const totalAbs = mTotales ? parseInt(mTotales[3]) : 0
 
-    // Intentar parsear con tags XML primero
-    let votos = []
-    const votosXml = tagAll(xml, 'Voto').filter(v => !v.includes('xsi:nil'))
+    // Extraer descripción: texto entre el boletín y PRIMER TRÁMITE
+    const mDesc = texto.match(/\d{4,5}-\d{2}\s+([\s\S]+?)\s+PRIMER TR[ÁA]MITE/)
+    const descripcion = mDesc ? mDesc[1].trim() : ''
 
-    if (votosXml.length > 0) {
-      // La API devuelve tags XML estructurados
-      votos = votosXml.map(v => {
-        const opcion    = tag(v, 'OpcionVoto')
-        const dipXml    = v.match(/<Diputado[^>]*>([\s\S]*?)<\/Diputado>/i)?.[1] || ''
-        const n1        = tag(dipXml, 'Nombre')
-        const n2        = tag(dipXml, 'Nombre2')
-        const ap        = tag(dipXml, 'ApellidoPaterno')
-        const am        = tag(dipXml, 'ApellidoMaterno')
-        const milXml    = dipXml.match(/<Militancias[^>]*>([\s\S]*?)<\/Militancias>/i)?.[1] || ''
-        const partido   = tag(milXml, 'Nombre')
-        const nombre    = [n1, n2].filter(Boolean).join(' ').trim()
-          + (ap ? ' ' + ap : '') + (am ? ' ' + am : '')
-        return { diputado: nombre.trim(), partido, opcion }
+    // Extraer fecha
+    const mFecha = texto.match(/(\d{4}-\d{2}-\d{2})T/)
+    const fecha = mFecha ? mFecha[1] : ''
+
+    // Parsear votos: ID nombre(s) opcion
+    const inicioVotos = mTotales ? mTotales.index + mTotales[0].length : 0
+    const votosTexto = texto.substring(inicioVotos)
+
+    const patron = /(\d{3,4})\s+((?:[A-ZÁÉÍÓÚÑÜ][a-záéíóúñüà]+\s+)+(?:y\s+[A-ZÁÉÍÓÚÑÜ][a-záéíóúñüà]+\s+)?)(Afirmativo|En Contra|Abstencion|No Vota|Dispensado|Pareo)/g
+    const votos = []
+    let m
+    while ((m = patron.exec(votosTexto)) !== null) {
+      votos.push({
+        diputado: m[2].trim(),
+        opcion: m[3],
+        partido: '',
       })
-    } else {
-      // Texto plano como fallback
-      const votosSection = xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
-      votos = parsearVotosTexto(votosSection)
     }
 
     return { tipo: 'detalle', descripcion, fecha, votos, resumen: { si: totalSi, no: totalNo, abs: totalAbs } }
   }
 
+  if (tipo === 'boletin') {
+    // Cada votación: ID fecha tipo resultado quorum sesionID numero fecha2 fecha3 tipoSesion boletin descripcion PRIMER TRAMITE totales
+    // Extraer bloques por ID de votación (5 dígitos al inicio)
+    const bloques = texto.split(/(?=\b8\d{4}\s+\d{4}-\d{2}-\d{2})/).filter(b => /^8\d{4}/.test(b.trim()))
+    const votaciones = bloques.map(b => {
+      const partes = b.trim().split(/\s+/)
+      const id = partes[0]
+      const fecha = partes[1]?.split('T')[0] || ''
+
+      // resultado: Aprobado o Rechazado
+      const mResultado = b.match(/\b(Aprobado|Rechazado)\b/)
+      const resultado = mResultado ? mResultado[1] : ''
+
+      // quorum
+      const mQuorum = b.match(/\b(Quorum Simple|Quorum Calificado[^,\n]*)\b/i)
+      const quorum = mQuorum ? mQuorum[1] : ''
+
+      // boletín
+      const mBoletin = b.match(/\b(\d{4,5}-\d{2})\b/)
+      const boletin = mBoletin ? mBoletin[1] : ''
+
+      // descripción: entre boletín y PRIMER TRÁMITE
+      const mDesc = b.match(/\d{4,5}-\d{2}\s+([\s\S]+?)\s+PRIMER TR[ÁA]MITE/)
+      const descripcion = mDesc ? mDesc[1].trim() : ''
+
+      // totales: 4 números al final antes de los votos (o al final)
+      const mTot = b.match(/PRIMER INFORME\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/)
+      const totalSi  = mTot ? parseInt(mTot[1]) : 0
+      const totalNo  = mTot ? parseInt(mTot[2]) : 0
+      const totalAbs = mTot ? parseInt(mTot[3]) : 0
+
+      return { id, fecha, resultado, quorum, boletin, descripcion, totalSi, totalNo, totalAbs }
+    })
+    return { tipo: 'boletin', votaciones }
+  }
+
   if (tipo === 'sesiones') {
-    const sesiones = tagAll(xml, 'Sesion').map(s => ({
-      id:     tag(s, 'ID') || tag(s, 'Id'),
-      numero: tag(s, 'Numero'),
-      fecha:  tag(s, 'Fecha').split('T')[0],
-      tipo:   tag(s, 'Tipo'),
-    }))
+    // Sesiones: ID numero fecha fechaTermino tipo estado...
+    // Buscar patrones: número sesión seguido de fecha
+    const sesiones = []
+    const patron = /\b(\d+)\s+(\d+)\s+(\d{4}-\d{2}-\d{2})T/g
+    let m
+    while ((m = patron.exec(texto)) !== null) {
+      sesiones.push({ id: m[1], numero: m[2], fecha: m[3], tipo: 'Ordinaria' })
+    }
     const filtradas = fechaFiltro ? sesiones.filter(s => s.fecha === fechaFiltro) : sesiones
     return { tipo: 'sesiones', sesiones: filtradas }
   }
 
   if (tipo === 'sesion') {
-    const votaciones = tagAll(xml, 'Votacion').map(v => ({
-      id:          tag(v, 'Id'),
-      descripcion: tag(v, 'Descripcion'),
-      fecha:       tag(v, 'Fecha').split('T')[0],
-      totalSi:     parseInt(tag(v, 'TotalSi'))        || 0,
-      totalNo:     parseInt(tag(v, 'TotalNo'))         || 0,
-      totalAbs:    parseInt(tag(v, 'TotalAbstencion')) || 0,
-      quorum:      tag(v, 'Quorum'),
-      resultado:   tag(v, 'Resultado'),
-    }))
+    const bloques = texto.split(/(?=\b8\d{4}\s+\d{4}-\d{2}-\d{2})/).filter(b => /^8\d{4}/.test(b.trim()))
+    const votaciones = bloques.map(b => {
+      const partes = b.trim().split(/\s+/)
+      const id = partes[0]
+      const fecha = partes[1]?.split('T')[0] || ''
+      const mResultado = b.match(/\b(Aprobado|Rechazado)\b/)
+      const resultado = mResultado ? mResultado[1] : ''
+      const mQuorum = b.match(/\b(Quorum Simple|Quorum Calificado[^,\n]*)\b/i)
+      const quorum = mQuorum ? mQuorum[1] : ''
+      const mDesc = b.match(/\d{4,5}-\d{2}\s+([\s\S]+?)\s+PRIMER TR[ÁA]MITE/)
+      const descripcion = mDesc ? mDesc[1].trim() : ''
+      const mTot = b.match(/PRIMER INFORME\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/)
+      const totalSi  = mTot ? parseInt(mTot[1]) : 0
+      const totalNo  = mTot ? parseInt(mTot[2]) : 0
+      const totalAbs = mTot ? parseInt(mTot[3]) : 0
+      return { id, fecha, resultado, quorum, descripcion, totalSi, totalNo, totalAbs }
+    })
     return { tipo: 'sesion', votaciones }
   }
 
-  return { raw: xml.substring(0, 500) }
+  return { error: 'Tipo desconocido', raw: texto.substring(0, 300) }
 }
