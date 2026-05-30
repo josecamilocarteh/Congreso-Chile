@@ -13,13 +13,22 @@ export default async function handler(req, res) {
 
     // Datos del proyecto desde la API del Senado
     if (proyecto) {
-      // El boletín del Senado va sin el sufijo -XX (solo el número)
       const num = String(proyecto).split('-')[0]
       const urlSenado = 'https://tramitacion.senado.cl/wspublico/tramitacion.php?boletin=' + num
       const r = await fetch(urlSenado)
       if (!r.ok) return res.status(200).json({ error: 'API Senado código ' + r.status })
       const xmlS = await r.text()
       return res.status(200).json(parsearProyecto(xmlS))
+    }
+
+    // Votaciones del Senado por boletín
+    if (req.query.senado) {
+      const num = String(req.query.senado).split('-')[0]
+      const urlV = 'https://tramitacion.senado.cl/wspublico/votaciones.php?boletin=' + num
+      const r = await fetch(urlV)
+      if (!r.ok) return res.status(200).json({ error: 'API Senado código ' + r.status })
+      const xmlV = await r.text()
+      return res.status(200).json(parsearSenado(xmlV))
     }
 
     if (votacionId) {
@@ -62,6 +71,32 @@ function tagAll(str, name) {
 
 function limpiar(s) {
   return (s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function parsearSenado(xml) {
+  const votaciones = tagAll(xml, 'votacion').map(function (v) {
+    const detalleXml = (v.match(/<DETALLE_VOTACION>([\s\S]*?)<\/DETALLE_VOTACION>/i) || [])[1] || ''
+    const votos = tagAll(detalleXml, 'VOTO').map(function (vt) {
+      return {
+        parlamentario: limpiar(tag(vt, 'PARLAMENTARIO')),
+        seleccion: limpiar(tag(vt, 'SELECCION'))
+      }
+    })
+    return {
+      sesion: limpiar(tag(v, 'SESION')),
+      fecha: limpiar(tag(v, 'FECHA')),
+      tema: limpiar(tag(v, 'TEMA')),
+      si: parseInt(tag(v, 'SI')) || 0,
+      no: parseInt(tag(v, 'NO')) || 0,
+      abstencion: parseInt(tag(v, 'ABSTENCION')) || 0,
+      pareo: parseInt(tag(v, 'PAREO')) || 0,
+      quorum: limpiar(tag(v, 'QUORUM')),
+      tipoVotacion: limpiar(tag(v, 'TIPOVOTACION')),
+      etapa: limpiar(tag(v, 'ETAPA')),
+      votos: votos
+    }
+  })
+  return { tipo: 'senado', votaciones: votaciones }
 }
 
 function parsearProyecto(xml) {
