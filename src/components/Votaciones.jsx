@@ -3,18 +3,15 @@ import { diputados, PARTIDO_COLORS } from '../data'
 
 const OPCION_LABELS = { 'Afirmativo': 'A favor', 'En Contra': 'En contra', 'Abstencion': 'Abstención', 'No Vota': 'No vota', 'Dispensado': 'Dispensado', 'Pareo': 'Pareado' }
 const OPCION_COLORS = { 'Afirmativo': '#10b981', 'En Contra': '#ef4444', 'Abstencion': '#f59e0b', 'No Vota': '#94a3b8', 'Dispensado': '#cbd5e1', 'Pareo': '#cbd5e1' }
-const CONECTORES = ['y', 'de', 'del', 'la', 'las', 'los']
+const CONECTORES = new Set(['y', 'de', 'del', 'la', 'las', 'los'])
 
-// Normalizar texto: sin tildes, minúsculas, solo letras
 function norm(s) {
   return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-// Pre-calcular tokens de cada diputado de data.js
 const DIP_TOKENS = diputados.map(d => ({ dip: d, toks: new Set(norm(d.nombre).split(' ')) }))
 
-// Cruzar nombre de la API con data.js → devuelve el diputado (con partido y color)
 function buscarDiputado(nombreApi) {
   const toks = norm(nombreApi).split(' ').filter(Boolean)
   let best = null, bestScore = 0
@@ -26,12 +23,11 @@ function buscarDiputado(nombreApi) {
   return bestScore >= 2 ? best : null
 }
 
-// Extraer apellido paterno (penúltimo token, saltando conectores)
 function apellidoDe(nombre) {
   const t = norm(nombre).split(' ').filter(Boolean)
   if (t.length < 2) return nombre
   let i = t.length - 2
-  while (i > 0 && CONECTORES.includes(t[i])) i--
+  while (i > 0 && CONECTORES.has(t[i])) i--
   return t[i]
 }
 
@@ -55,13 +51,11 @@ export default function Votaciones() {
       const res = await fetch(`/api/votaciones?boletin=${encodeURIComponent(inputBoletin.trim())}`)
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      if (!data.votaciones?.length) throw new Error('No se encontraron votaciones para este boletín.')
+      if (!data.votaciones?.length) throw new Error('No se encontraron votaciones para este boletín. Verifica el número (ej: 18216-05).')
       setVotaciones(data.votaciones)
     } catch (e) { setError(e.message) }
     setLoading(false)
   }
-
-
 
   async function cargarDetalle(v) {
     setVotacionSel(v); setDetalle(null); setFiltroOpcion('Todos'); setFiltroPartido('Todos'); setBusqueda(''); setOrden('partido')
@@ -70,28 +64,21 @@ export default function Votaciones() {
       const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      // Enriquecer cada voto con partido y apellido desde data.js
       const votosEnriquecidos = (data.votos || []).map(voto => {
         const dip = buscarDiputado(voto.diputado)
-        return {
-          ...voto,
-          partido: dip?.partido || 'Sin partido',
-          apellido: apellidoDe(dip?.nombre || voto.diputado),
-        }
+        return { ...voto, partido: dip?.partido || 'Sin partido', apellido: apellidoDe(dip?.nombre || voto.diputado) }
       })
       setDetalle({ ...data, votos: votosEnriquecidos })
     } catch (e) { setError(e.message) }
     setLoadingDetalle(false)
   }
 
-  // Ordenar votos
   const votosOrdenados = detalle?.votos ? [...detalle.votos].sort((a, b) => {
     if (orden === 'apellido') return a.apellido.localeCompare(b.apellido)
     if (orden === 'opcion') {
-      const ord = { 'Afirmativo': 0, 'En Contra': 1, 'Abstencion': 2, 'No Vota': 3, 'Pareo': 4, 'Dispensado': 5 }
+      const ord = { 'Afirmativo': 0, 'En Contra': 1, 'Abstencion': 2, 'No Vota': 3 }
       return (ord[a.opcion] ?? 9) - (ord[b.opcion] ?? 9) || a.apellido.localeCompare(b.apellido)
     }
-    // por partido, luego apellido
     return (a.partido || 'ZZ').localeCompare(b.partido || 'ZZ') || a.apellido.localeCompare(b.apellido)
   }) : []
 
@@ -121,30 +108,30 @@ export default function Votaciones() {
       <div style={S.card}>
         <div style={S.title}>🗳 Votaciones de la Cámara de Diputadas y Diputados</div>
         <div style={S.sub}>Datos en tiempo real · API oficial del Congreso Nacional · opendata.congreso.cl</div>
-
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <label style={S.label}>Número de boletín</label>
-              <input value={inputBoletin} onChange={e => setInputBoletin(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && buscarBoletin()}
-                placeholder="Ej: 18216-05 o 18216" style={S.input} />
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>Búscalo en tramitacion.senado.cl</div>
-            </div>
-            <button onClick={buscarBoletin} disabled={loading || !inputBoletin.trim()} style={S.btnPrimary}>
-              {loading ? 'Buscando...' : 'Buscar votaciones'}
-            </button>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <label style={S.label}>Número de boletín</label>
+            <input
+              value={inputBoletin}
+              onChange={e => setInputBoletin(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && buscarBoletin()}
+              placeholder="Ej: 18216-05 o 18216"
+              style={S.input}
+            />
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>Búscalo en tramitacion.senado.cl</div>
           </div>
-        )}
-
-
+          <button onClick={buscarBoletin} disabled={loading || !inputBoletin.trim()} style={S.btnPrimary}>
+            {loading ? 'Buscando...' : 'Buscar votaciones'}
+          </button>
+        </div>
         {error && <div style={S.error}>⚠️ {error}</div>}
       </div>
 
-          </div>
+      {loading && (
+        <div style={{ ...S.card, textAlign: 'center', padding: 40, color: '#64748b' }}>
+          ⏳ Consultando la API del Congreso...
         </div>
       )}
-
-      {loading && <div style={{ ...S.card, textAlign: 'center', padding: 40, color: '#64748b' }}>⏳ Consultando la API del Congreso...</div>}
 
       {votaciones && !loading && (
         <div style={S.card}>
@@ -153,26 +140,31 @@ export default function Votaciones() {
             {votaciones.map((v, i) => {
               const total = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbs || 0)
               return (
-                <div key={v.id || i} onClick={() => cargarDetalle(v)}
-                  style={{
-                    padding: '12px 14px', borderRadius: 10, cursor: 'pointer', marginBottom: 8,
-                    background: votacionSel?.id === v.id ? '#f0fdfa' : 'white',
-                    border: votacionSel?.id === v.id ? '2px solid #0f766e' : '1px solid #e2e8f0',
-                    transition: 'all 0.15s',
-                  }}>
+                <div key={v.id || i} onClick={() => cargarDetalle(v)} style={{
+                  padding: '12px 14px', borderRadius: 10, cursor: 'pointer', marginBottom: 8,
+                  background: votacionSel?.id === v.id ? '#f0fdfa' : 'white',
+                  border: votacionSel?.id === v.id ? '2px solid #0f766e' : '1px solid #e2e8f0',
+                  transition: 'all 0.15s',
+                }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 5 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'white', background: '#0f766e', borderRadius: 6, padding: '1px 7px', flexShrink: 0, marginTop: 1 }}>#{v.numero || i + 1}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>{v.descripcion || '(Sin descripción)'}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'white', background: '#0f766e', borderRadius: 6, padding: '2px 8px', flexShrink: 0 }}>
+                      #{v.numero || i + 1}
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>
+                      {v.descripcion || '(Sin descripción)'}
+                    </span>
                   </div>
-                  <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#64748b', flexWrap: 'wrap', marginBottom: total > 0 ? 8 : 0, paddingLeft: 32 }}>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#64748b', flexWrap: 'wrap', marginBottom: total > 0 ? 8 : 0, paddingLeft: 36 }}>
                     {v.fecha && <span>📅 {v.fecha}</span>}
                     {v.quorum && <span>⚖️ {v.quorum}</span>}
-                    {v.resultado && <span style={{ color: v.resultado === 'Aprobado' ? '#10b981' : '#ef4444', fontWeight: 600 }}>
-                      {v.resultado === 'Aprobado' ? '✓' : '✗'} {v.resultado}
-                    </span>}
+                    {v.resultado && (
+                      <span style={{ color: v.resultado === 'Aprobado' ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                        {v.resultado === 'Aprobado' ? '✓' : '✗'} {v.resultado}
+                      </span>
+                    )}
                   </div>
                   {total > 0 && (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingLeft: 32 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingLeft: 36 }}>
                       <div style={{ flex: 1, height: 7, borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', display: 'flex' }}>
                         {v.totalSi > 0 && <div style={{ width: `${(v.totalSi / total) * 100}%`, background: '#10b981' }} />}
                         {v.totalAbs > 0 && <div style={{ width: `${(v.totalAbs / total) * 100}%`, background: '#f59e0b' }} />}
@@ -283,7 +275,7 @@ export default function Votaciones() {
                   const label = OPCION_LABELS[v.opcion] || v.opcion
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: `${color}12`, border: `1px solid ${color}25` }}>
-                      <div style={{ width: 9, height: 9, borderRadius: '50%', background: PARTIDO_COLORS[v.partido] || '#94a3b8', flexShrink: 0, border: v.partido === 'Independiente' ? '1px solid #cbd5e1' : 'none' }} />
+                      <div style={{ width: 9, height: 9, borderRadius: '50%', background: PARTIDO_COLORS[v.partido] || '#94a3b8', flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.diputado}</div>
                         <div style={{ fontSize: 10, color: '#94a3b8' }}>{v.partido}</div>
@@ -309,8 +301,5 @@ const S = {
   input:      { padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 14, fontFamily: "'Inter', sans-serif", width: '100%', boxSizing: 'border-box' },
   select:     { padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: "'Inter', sans-serif", background: 'white', color: '#475569' },
   btnPrimary: { padding: '10px 24px', background: '#0f766e', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap' },
-  btnSec:     { padding: '7px 14px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
-  tabBtn:     { padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, fontFamily: "'Inter', sans-serif", transition: 'all 0.15s' },
   error:      { background: '#fde8e8', color: '#dc2626', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginTop: 12 },
-  row:        { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' },
 }
