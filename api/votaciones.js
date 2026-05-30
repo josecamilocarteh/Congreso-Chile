@@ -9,6 +9,19 @@ export default async function handler(req, res) {
     let url = ''
     let tipo = ''
 
+    const proyecto = req.query.proyecto
+
+    // Datos del proyecto desde la API del Senado
+    if (proyecto) {
+      // El boletín del Senado va sin el sufijo -XX (solo el número)
+      const num = String(proyecto).split('-')[0]
+      const urlSenado = 'https://tramitacion.senado.cl/wspublico/tramitacion.php?boletin=' + num
+      const r = await fetch(urlSenado)
+      if (!r.ok) return res.status(200).json({ error: 'API Senado código ' + r.status })
+      const xmlS = await r.text()
+      return res.status(200).json(parsearProyecto(xmlS))
+    }
+
     if (votacionId) {
       url = BASE + '/getVotacion_Detalle?prmVotacionId=' + votacionId
       tipo = 'detalle'
@@ -16,7 +29,7 @@ export default async function handler(req, res) {
       url = BASE + '/getVotaciones_Boletin?prmBoletin=' + boletin
       tipo = 'boletin'
     } else {
-      return res.status(400).json({ error: 'Falta el parámetro boletin o votacionId' })
+      return res.status(400).json({ error: 'Falta el parámetro boletin, votacionId o proyecto' })
     }
 
     const resp = await fetch(url)
@@ -45,6 +58,27 @@ function tagAll(str, name) {
   let m
   while ((m = re.exec(str)) !== null) out.push(m[1].trim())
   return out
+}
+
+function limpiar(s) {
+  return (s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function parsearProyecto(xml) {
+  // Solo el primer <descripcion> (datos del proyecto)
+  const desc = (xml.match(/<descripcion>([\s\S]*?)<\/descripcion>/i) || [])[1] || ''
+  return {
+    tipo: 'proyecto',
+    boletin: limpiar(tag(desc, 'boletin')),
+    titulo: limpiar(tag(desc, 'titulo')),
+    fechaIngreso: limpiar(tag(desc, 'fecha_ingreso')),
+    iniciativa: limpiar(tag(desc, 'iniciativa')),
+    camaraOrigen: limpiar(tag(desc, 'camara_origen')),
+    urgencia: limpiar(tag(desc, 'urgencia_actual')),
+    etapa: limpiar(tag(desc, 'etapa')),
+    subetapa: limpiar(tag(desc, 'subetapa')),
+    estado: limpiar(tag(desc, 'estado')),
+  }
 }
 
 function parsear(xml, tipo) {
