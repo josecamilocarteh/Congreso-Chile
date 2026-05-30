@@ -36,6 +36,7 @@ export default function Votaciones() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [votaciones, setVotaciones] = useState(null)
+  const [proyecto, setProyecto] = useState(null)
   const [votacionSel, setVotacionSel] = useState(null)
   const [detalle, setDetalle] = useState(null)
   const [loadingDetalle, setLoadingDetalle] = useState(false)
@@ -46,13 +47,19 @@ export default function Votaciones() {
 
   async function buscarBoletin() {
     if (!inputBoletin.trim()) return
-    setLoading(true); setError(null); setVotaciones(null); setVotacionSel(null); setDetalle(null)
+    const bol = inputBoletin.trim()
+    setLoading(true); setError(null); setVotaciones(null); setVotacionSel(null); setDetalle(null); setProyecto(null)
     try {
-      const res = await fetch(`/api/votaciones?boletin=${encodeURIComponent(inputBoletin.trim())}`)
+      const res = await fetch(`/api/votaciones?boletin=${encodeURIComponent(bol)}`)
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       if (!data.votaciones?.length) throw new Error('No se encontraron votaciones para este boletín. Verifica el número (ej: 18216-05).')
       setVotaciones(data.votaciones)
+      // Cargar datos del proyecto desde el Senado (en paralelo, sin bloquear)
+      fetch(`/api/votaciones?proyecto=${encodeURIComponent(bol)}`)
+        .then(r => r.json())
+        .then(p => { if (p && p.titulo) setProyecto(p) })
+        .catch(() => {})
     } catch (e) { setError(e.message) }
     setLoading(false)
   }
@@ -130,6 +137,24 @@ export default function Votaciones() {
       {loading && (
         <div style={{ ...S.card, textAlign: 'center', padding: 40, color: '#64748b' }}>
           ⏳ Consultando la API del Congreso...
+        </div>
+      )}
+
+      {proyecto && !loading && (
+        <div style={{ ...S.card, borderLeft: '4px solid #0f766e' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#0f766e', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+            Proyecto · Boletín {proyecto.boletin}
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', lineHeight: 1.3, marginBottom: 12 }}>
+            {proyecto.titulo}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {proyecto.iniciativa && <span style={S.chip}>📄 {proyecto.iniciativa}</span>}
+            {proyecto.camaraOrigen && <span style={S.chip}>🏛 Origen: {proyecto.camaraOrigen}</span>}
+            {proyecto.urgencia && proyecto.urgencia !== 'Sin urgencia' && <span style={{ ...S.chip, background: '#fef3c7', color: '#92400e' }}>⚡ Urgencia {proyecto.urgencia}</span>}
+            {proyecto.etapa && <span style={S.chip}>📍 {proyecto.etapa}</span>}
+            {proyecto.estado && <span style={{ ...S.chip, background: '#dcfce7', color: '#166534' }}>{proyecto.estado}</span>}
+          </div>
         </div>
       )}
 
@@ -302,4 +327,5 @@ const S = {
   select:     { padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: 'Inter, sans-serif', background: 'white', color: '#475569' },
   btnPrimary: { padding: '10px 24px', background: '#0f766e', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' },
   error:      { background: '#fde8e8', color: '#dc2626', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginTop: 12 },
+  chip:       { fontSize: 12, fontWeight: 600, color: '#475569', background: '#f1f5f9', borderRadius: 6, padding: '4px 10px' },
 }
