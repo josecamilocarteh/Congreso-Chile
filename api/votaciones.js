@@ -1,97 +1,101 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET')
 
-  const { boletin, votacionId, sesionId, fecha } = req.query
+  const boletin = req.query.boletin
+  const votacionId = req.query.votacionId
   const BASE = 'https://opendata.congreso.cl/wscamaradiputados.asmx'
 
   try {
-    let xml = '', tipo = ''
+    let url = ''
+    let tipo = ''
 
     if (votacionId) {
-      xml = await fetchGet(`${BASE}/getVotacion_Detalle?prmVotacionId=${votacionId}`)
+      url = BASE + '/getVotacion_Detalle?prmVotacionId=' + votacionId
       tipo = 'detalle'
     } else if (boletin) {
-      xml = await fetchGet(`${BASE}/getVotaciones_Boletin?prmBoletin=${boletin}`)
+      url = BASE + '/getVotaciones_Boletin?prmBoletin=' + boletin
       tipo = 'boletin'
-    } else if (sesionId) {
-      xml = await fetchGet(`${BASE}/getSesion_Detalle?prmSesionId=${sesionId}`)
-      tipo = 'sesion'
-    } else { else {
-      return res.status(400).json({ error: 'Parámetro requerido' })
+    } else {
+      return res.status(400).json({ error: 'Falta el parámetro boletin o votacionId' })
     }
 
-    const texto = xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-    const resultado = parsear(texto, tipo, fecha)
-    // Para debug: si no se parseó nada, devolver muestra del texto
-    if ((tipo === 'sesiones' && !resultado.sesiones?.length) ||
-        (tipo === 'boletin' && !resultado.votaciones?.length)) {
-      resultado.debug = texto.substring(0, 400)
+    const resp = await fetch(url)
+    if (!resp.ok) {
+      return res.status(200).json({ error: 'La API del Congreso respondió con código ' + resp.status })
     }
-    return res.status(200).json(resultado)
+
+    const xml = await resp.text()
+    const data = parsear(xml, tipo)
+    return res.status(200).json(data)
 
   } catch (e) {
-    return res.status(500).json({ error: e.message })
+    return res.status(200).json({ error: 'Error al consultar: ' + e.message })
   }
 }
 
-async function fetchGet(url) {
-  const r = await fetch(url, { headers: { 'Accept': 'text/xml' } })
-  if (!r.ok) throw new Error(`HTTP ${r.status}`)
-  return r.text()
+function tag(str, name) {
+  const re = new RegExp('<' + name + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + name + '>', 'i')
+  const m = str.match(re)
+  return m ? m[1].trim() : ''
 }
 
-function parsear(texto, tipo, fechaFiltro) {
+function tagAll(str, name) {
+  const re = new RegExp('<' + name + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + name + '>', 'gi')
+  const out = []
+  let m
+  while ((m = re.exec(str)) !== null) out.push(m[1].trim())
+  return out
+}
 
-  if (tipo === 'detalle') {
-    const mTot = texto.match(/\b(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?=\d{3,4}\s+[A-ZÁÉÍÓÚÑÜ])/)
-    const totalSi  = mTot ? parseInt(mTot[1]) : 0
-    const totalNo  = mTot ? parseInt(mTot[2]) : 0
-    const totalAbs = mTot ? parseInt(mTot[3]) : 0
+function parsear(xml, tipo) {
 
-    const mDesc = texto.match(/\d{4,5}-\d{2}\s+([\s\S]+?)\s+PRIMER TR[ÁA]MITE/)
-    const descripcion = mDesc ? mDesc[1].trim() : ''
-    const mFecha = texto.match(/(\d{4}-\d{2}-\d{2})T/)
-    const fecha = mFecha ? mFecha[1] : ''
-
-    const inicioVotos = mTot ? mTot.index + mTot[0].length : 0
-    const votosTexto = texto.substring(inicioVotos)
-    const patron = /(\d{3,4})\s+((?:[A-ZÁÉÍÓÚÑÜ][a-záéíóúñüà]+(?:\s+y)?\s+)+)(Afirmativo|En Contra|Abstencion|No Vota|Dispensado|Pareo)/g
-    const votos = []
-    let m
-    while ((m = patron.exec(votosTexto)) !== null) {
-      votos.push({ diputado: m[2].trim(), opcion: m[3] })
-    }
-    return { tipo: 'detalle', descripcion, fecha, votos, resumen: { si: totalSi, no: totalNo, abs: totalAbs } }
-  }
-
-  if (tipo === 'boletin' || tipo === 'sesion') {
-    const bloques = texto.split(/(?=\b8\d{4}\s+\d{4}-\d{2}-\d{2})/).filter(b => /^8\d{4}/.test(b.trim()))
-    let votaciones = bloques.map(b => {
-      const partes = b.trim().split(/\s+/)
-      const id = partes[0]
-      const fechaHora = partes[1] || ''
-      const fecha = fechaHora.split('T')[0]
-      const mRes  = b.match(/\b(Aprobado|Rechazado)\b/)
-      const mQ    = b.match(/Quorum\s+(Simple|Calificado[^0-9]*)/i)
-      const mBol  = b.match(/\b(\d{4,5}-\d{2})\b/)
-      const mDesc = b.match(/\d{4,5}-\d{2}\s+([\s\S]+?)\s+PRIMER TR[ÁA]MITE/)
-      const mTot  = b.match(/PRIMER INFORME\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/)
+  if (tipo === 'boletin') {
+    let votaciones = tagAll(xml, 'Votacion').map(function (v) {
+      const sesionXml = (v.match(/<Sesion[^>]*>([\s\S]*?)<\/Sesion>/i) || [])[1] || ''
+      const articuloXml = (v.match(/<Articulo[^>]*>([\s\S]*?)<\/Articulo>/i) || [])[1] || ''
+      const descripcion = articuloXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
       return {
-        id, fechaHora, fecha,
-        resultado:   mRes  ? mRes[1]  : '',
-        quorum:      mQ    ? `Quórum ${mQ[1].trim()}` : '',
-        boletin:     mBol  ? mBol[1]  : '',
-        descripcion: mDesc ? mDesc[1].trim() : '',
-        totalSi:     mTot  ? parseInt(mTot[1]) : 0,
-        totalNo:     mTot  ? parseInt(mTot[2]) : 0,
-        totalAbs:    mTot  ? parseInt(mTot[3]) : 0,
+        id: tag(v, 'ID'),
+        fechaHora: tag(v, 'Fecha'),
+        fecha: tag(v, 'Fecha').split('T')[0],
+        resultado: tag(v, 'Resultado'),
+        quorum: tag(v, 'Quorum'),
+        boletin: tag(v, 'Boletin'),
+        descripcion: descripcion,
+        sesionId: tag(sesionXml, 'ID'),
+        totalSi: parseInt(tag(v, 'TotalAfirmativos')) || 0,
+        totalNo: parseInt(tag(v, 'TotalNegativos')) || 0,
+        totalAbs: parseInt(tag(v, 'TotalAbstenciones')) || 0
       }
     })
-    // Ordenar cronológicamente (más antigua primero) y numerar
-    votaciones.sort((a, b) => a.fechaHora.localeCompare(b.fechaHora))
-    votaciones = votaciones.map((v, i) => ({ ...v, numero: i + 1 }))
-    return { tipo, votaciones }
+    votaciones.sort(function (a, b) { return a.fechaHora.localeCompare(b.fechaHora) })
+    votaciones = votaciones.map(function (v, i) { v.numero = i + 1; return v })
+    return { tipo: 'boletin', votaciones: votaciones }
+  }
+
+  if (tipo === 'detalle') {
+    const articuloXml = (xml.match(/<Articulo[^>]*>([\s\S]*?)<\/Articulo>/i) || [])[1] || ''
+    const descripcion = articuloXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    const fecha = tag(xml, 'Fecha').split('T')[0]
+    const totalSi = parseInt(tag(xml, 'TotalAfirmativos')) || 0
+    const totalNo = parseInt(tag(xml, 'TotalNegativos')) || 0
+    const totalAbs = parseInt(tag(xml, 'TotalAbstenciones')) || 0
+
+    const votos = tagAll(xml, 'Voto')
+      .filter(function (v) { return v.indexOf('xsi:nil="true"') === -1 })
+      .map(function (v) {
+        const dipXml = (v.match(/<Diputado[^>]*>([\s\S]*?)<\/Diputado>/i) || [])[1] || ''
+        const n1 = tag(dipXml, 'Nombre')
+        const n2 = tag(dipXml, 'Nombre2')
+        const apP = tag(dipXml, 'ApellidoPaterno')
+        const apM = tag(dipXml, 'ApellidoMaterno')
+        let nombre = [n1, n2].filter(Boolean).join(' ')
+        if (apP) nombre += ' ' + apP
+        if (apM) nombre += ' ' + apM
+        return { diputado: nombre.trim(), opcion: tag(v, 'OpcionVoto') }
+      })
+
+    return { tipo: 'detalle', descripcion: descripcion, fecha: fecha, votos: votos, resumen: { si: totalSi, no: totalNo, abs: totalAbs } }
   }
 
   return { error: 'Tipo desconocido' }
