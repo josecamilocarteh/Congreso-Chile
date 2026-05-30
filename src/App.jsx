@@ -3,6 +3,7 @@ import Senado from './components/Senado'
 import Diputados from './components/Diputados'
 import SimuladorQuorum from './components/SimuladorQuorum'
 import Votaciones from './components/Votaciones'
+import VotacionesSenado from './components/VotacionesSenado'
 
 export default function App() {
   const [tab, setTab] = useState('senado')
@@ -36,7 +37,12 @@ export default function App() {
             <button
               onClick={() => setTab('votaciones')}
               style={{ ...styles.tabBtn, ...(tab === 'votaciones' ? { ...styles.tabActive, background: '#0f766e' } : styles.tabInactive) }}>
-              🗳 Votaciones
+              🗳 Votaciones Cámara
+            </button>
+            <button
+              onClick={() => setTab('votsenado')}
+              style={{ ...styles.tabBtn, ...(tab === 'votsenado' ? { ...styles.tabActive, background: '#7c3aed' } : styles.tabInactive) }}>
+              🏛 Votaciones Senado
             </button>
           </div>
         </div>
@@ -44,7 +50,7 @@ export default function App() {
 
       {/* CONTENT */}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 20px 60px' }}>
-        {tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : tab === 'simulador' ? <SimuladorQuorum /> : <Votaciones />}
+        {tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : tab === 'simulador' ? <SimuladorQuorum /> : tab === 'votaciones' ? <Votaciones /> : <VotacionesSenado />}
       </main>
     </div>
   )
