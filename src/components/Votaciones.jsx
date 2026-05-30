@@ -1,48 +1,56 @@
 import { useState } from 'react'
-import { PARTIDO_COLORS } from '../data'
+import { diputados, PARTIDO_COLORS } from '../data'
 
-const OPCION_LABELS  = { 'Afirmativo': 'A favor', 'En Contra': 'En contra', 'Abstencion': 'Abstención', 'No Vota': 'No vota', 'Dispensado': 'Dispensado', 'Pareo': 'Pareado' }
-const OPCION_COLORS  = { 'Afirmativo': '#10b981', 'En Contra': '#ef4444', 'Abstencion': '#f59e0b', 'No Vota': '#94a3b8', 'Dispensado': '#cbd5e1', 'Pareo': '#cbd5e1' }
+const OPCION_LABELS = { 'Afirmativo': 'A favor', 'En Contra': 'En contra', 'Abstencion': 'Abstención', 'No Vota': 'No vota', 'Dispensado': 'Dispensado', 'Pareo': 'Pareado' }
+const OPCION_COLORS = { 'Afirmativo': '#10b981', 'En Contra': '#ef4444', 'Abstencion': '#f59e0b', 'No Vota': '#94a3b8', 'Dispensado': '#cbd5e1', 'Pareo': '#cbd5e1' }
+const CONECTORES = ['y', 'de', 'del', 'la', 'las', 'los']
 
-// Mapa de nombre de partido API → partido en nuestros datos
-const PARTIDO_MAP = {
-  'Partido Socialista': 'PS', 'PS': 'PS',
-  'Partido por la Democracia': 'PPD', 'PPD': 'PPD',
-  'Partido Demócrata Cristiano': 'PDC', 'PDC': 'PDC',
-  'Partido Comunista': 'PC', 'PC': 'PC',
-  'Frente Amplio': 'FA', 'FA': 'FA',
-  'Federación Regionalista Verde Social': 'FREVS', 'FREVS': 'FREVS',
-  'Partido Liberal': 'Liberal',
-  'Renovación Nacional': 'RN', 'RN': 'RN',
-  'UDI': 'UDI', 'Unión Demócrata Independiente': 'UDI',
-  'Partido Republicano': 'Republicano', 'Republicano': 'Republicano',
-  'Evópoli': 'Evópoli',
-  'Partido de la Gente': 'PDG', 'PDG': 'PDG',
-  'Partido Nueva Ley': 'PNL', 'PNL': 'PNL',
-  'Acción Humanista': 'AH',
-  'Partido Social Cristiano': 'PSC', 'PSC': 'PSC',
-  'Partido Demócratas': 'DEM', 'DEM': 'DEM',
+// Normalizar texto: sin tildes, minúsculas, solo letras
+function norm(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// Pre-calcular tokens de cada diputado de data.js
+const DIP_TOKENS = diputados.map(d => ({ dip: d, toks: new Set(norm(d.nombre).split(' ')) }))
+
+// Cruzar nombre de la API con data.js → devuelve el diputado (con partido y color)
+function buscarDiputado(nombreApi) {
+  const toks = norm(nombreApi).split(' ').filter(Boolean)
+  let best = null, bestScore = 0
+  for (const { dip, toks: dt } of DIP_TOKENS) {
+    let s = 0
+    for (const t of toks) if (dt.has(t)) s++
+    if (s > bestScore) { bestScore = s; best = dip }
+  }
+  return bestScore >= 2 ? best : null
+}
+
+// Extraer apellido paterno (penúltimo token, saltando conectores)
+function apellidoDe(nombre) {
+  const t = norm(nombre).split(' ').filter(Boolean)
+  if (t.length < 2) return nombre
+  let i = t.length - 2
+  while (i > 0 && CONECTORES.includes(t[i])) i--
+  return t[i]
 }
 
 export default function Votaciones() {
-  const [modo, setModo] = useState('boletin')
   const [inputBoletin, setInputBoletin] = useState('')
-  const [inputFecha, setInputFecha] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [votaciones, setVotaciones] = useState(null)
-  const [sesiones, setSesiones] = useState(null)
   const [votacionSel, setVotacionSel] = useState(null)
   const [detalle, setDetalle] = useState(null)
   const [loadingDetalle, setLoadingDetalle] = useState(false)
   const [filtroOpcion, setFiltroOpcion] = useState('Todos')
   const [filtroPartido, setFiltroPartido] = useState('Todos')
   const [busqueda, setBusqueda] = useState('')
-  const [orden, setOrden] = useState('partido') // partido | alfabetico | opcion
+  const [orden, setOrden] = useState('partido')
 
   async function buscarBoletin() {
     if (!inputBoletin.trim()) return
-    setLoading(true); setError(null); setVotaciones(null); setVotacionSel(null); setDetalle(null); setSesiones(null)
+    setLoading(true); setError(null); setVotaciones(null); setVotacionSel(null); setDetalle(null)
     try {
       const res = await fetch(`/api/votaciones?boletin=${encodeURIComponent(inputBoletin.trim())}`)
       const data = await res.json()
@@ -53,30 +61,7 @@ export default function Votaciones() {
     setLoading(false)
   }
 
-  async function buscarFecha() {
-    if (!inputFecha) return
-    setLoading(true); setError(null); setSesiones(null); setVotaciones(null); setVotacionSel(null); setDetalle(null)
-    try {
-      const res = await fetch(`/api/votaciones?fecha=${inputFecha}`)
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      if (!data.sesiones?.length) throw new Error(`No se encontraron sesiones de sala el ${inputFecha}.`)
-      setSesiones(data.sesiones)
-    } catch (e) { setError(e.message) }
-    setLoading(false)
-  }
 
-  async function cargarSesion(sesionId) {
-    setLoading(true); setError(null); setVotaciones(null); setVotacionSel(null); setDetalle(null)
-    try {
-      const res = await fetch(`/api/votaciones?sesionId=${sesionId}`)
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      if (!data.votaciones?.length) throw new Error('Esta sesión no tiene votaciones registradas.')
-      setVotaciones(data.votaciones)
-    } catch (e) { setError(e.message) }
-    setLoading(false)
-  }
 
   async function cargarDetalle(v) {
     setVotacionSel(v); setDetalle(null); setFiltroOpcion('Todos'); setFiltroPartido('Todos'); setBusqueda(''); setOrden('partido')
@@ -85,25 +70,32 @@ export default function Votaciones() {
       const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      setDetalle(data)
+      // Enriquecer cada voto con partido y apellido desde data.js
+      const votosEnriquecidos = (data.votos || []).map(voto => {
+        const dip = buscarDiputado(voto.diputado)
+        return {
+          ...voto,
+          partido: dip?.partido || 'Sin partido',
+          apellido: apellidoDe(dip?.nombre || voto.diputado),
+        }
+      })
+      setDetalle({ ...data, votos: votosEnriquecidos })
     } catch (e) { setError(e.message) }
     setLoadingDetalle(false)
   }
 
-  // Ordenar y filtrar votos
+  // Ordenar votos
   const votosOrdenados = detalle?.votos ? [...detalle.votos].sort((a, b) => {
-    if (orden === 'alfabetico') return a.diputado.localeCompare(b.diputado)
+    if (orden === 'apellido') return a.apellido.localeCompare(b.apellido)
     if (orden === 'opcion') {
       const ord = { 'Afirmativo': 0, 'En Contra': 1, 'Abstencion': 2, 'No Vota': 3, 'Pareo': 4, 'Dispensado': 5 }
-      return (ord[a.opcion] ?? 9) - (ord[b.opcion] ?? 9)
+      return (ord[a.opcion] ?? 9) - (ord[b.opcion] ?? 9) || a.apellido.localeCompare(b.apellido)
     }
-    // orden por partido
-    const pa = PARTIDO_MAP[a.partido] || a.partido || 'ZZZ'
-    const pb = PARTIDO_MAP[b.partido] || b.partido || 'ZZZ'
-    return pa.localeCompare(pb) || a.diputado.localeCompare(b.diputado)
+    // por partido, luego apellido
+    return (a.partido || 'ZZ').localeCompare(b.partido || 'ZZ') || a.apellido.localeCompare(b.apellido)
   }) : []
 
-  const partidosEnVot = detalle ? [...new Set(votosOrdenados.map(v => v.partido).filter(Boolean))].sort() : []
+  const partidosEnVot = detalle ? [...new Set(detalle.votos.map(v => v.partido).filter(p => p && p !== 'Sin partido'))].sort() : []
 
   const votosFiltrados = votosOrdenados.filter(v =>
     (filtroOpcion === 'Todos' || v.opcion === filtroOpcion)
@@ -111,40 +103,26 @@ export default function Votaciones() {
     && (busqueda === '' || v.diputado.toLowerCase().includes(busqueda.toLowerCase()))
   )
 
-  // Resumen por partido
   const resumenPartido = detalle ? (() => {
     const map = {}
     detalle.votos.forEach(v => {
-      const p = PARTIDO_MAP[v.partido] || v.partido || 'Sin partido'
+      const p = v.partido || 'Sin partido'
       if (!map[p]) map[p] = { Si: 0, No: 0, Abs: 0, otros: 0 }
       if (v.opcion === 'Afirmativo') map[p].Si++
       else if (v.opcion === 'En Contra') map[p].No++
       else if (v.opcion === 'Abstencion') map[p].Abs++
       else map[p].otros++
     })
-    return Object.entries(map).sort((a, b) => (b[1].Si + b[1].No) - (a[1].Si + a[1].No))
+    return Object.entries(map).sort((a, b) => (b[1].Si + b[1].No + b[1].Abs) - (a[1].Si + a[1].No + a[1].Abs))
   })() : []
 
   return (
     <div>
-      {/* BÚSQUEDA */}
       <div style={S.card}>
         <div style={S.title}>🗳 Votaciones de la Cámara de Diputadas y Diputados</div>
         <div style={S.sub}>Datos en tiempo real · API oficial del Congreso Nacional · opendata.congreso.cl</div>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-          {[['boletin', '🔢 Por boletín'], ['fecha', '📅 Por fecha de sesión']].map(([id, label]) => (
-            <button key={id} onClick={() => {
-              setModo(id); setError(null); setVotaciones(null)
-              setSesiones(null); setVotacionSel(null); setDetalle(null)
-            }} style={{ ...S.tabBtn, background: modo === id ? '#0f766e' : '#f1f5f9', color: modo === id ? 'white' : '#475569' }}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {modo === 'boletin' && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 220 }}>
               <label style={S.label}>Número de boletín</label>
               <input value={inputBoletin} onChange={e => setInputBoletin(e.target.value)}
@@ -158,42 +136,14 @@ export default function Votaciones() {
           </div>
         )}
 
-        {modo === 'fecha' && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div>
-              <label style={S.label}>Fecha de sesión de sala</label>
-              <input type="date" value={inputFecha} onChange={e => setInputFecha(e.target.value)}
-                style={{ ...S.input, width: 'auto' }} />
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>La Cámara sesiona generalmente martes, miércoles y jueves</div>
-            </div>
-            <button onClick={buscarFecha} disabled={loading || !inputFecha} style={S.btnPrimary}>
-              {loading ? 'Buscando...' : 'Buscar sesiones'}
-            </button>
-          </div>
-        )}
 
         {error && <div style={S.error}>⚠️ {error}</div>}
       </div>
 
-      {/* SESIONES */}
-      {sesiones && !loading && (
-        <div style={S.card}>
-          <div style={S.title}>Sesiones del {inputFecha}</div>
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {sesiones.map(s => (
-              <div key={s.id} style={{ ...S.row, justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>Sesión N° {s.numero} · {s.tipo}</div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>ID: {s.id}</div>
-                </div>
-                <button onClick={() => cargarSesion(s.id)} style={S.btnSec}>Ver votaciones →</button>
-              </div>
-            ))}
           </div>
         </div>
       )}
 
-      {/* LISTA VOTACIONES */}
       {loading && <div style={{ ...S.card, textAlign: 'center', padding: 40, color: '#64748b' }}>⏳ Consultando la API del Congreso...</div>}
 
       {votaciones && !loading && (
@@ -210,28 +160,23 @@ export default function Votaciones() {
                     border: votacionSel?.id === v.id ? '2px solid #0f766e' : '1px solid #e2e8f0',
                     transition: 'all 0.15s',
                   }}>
-                  {/* Número y descripción */}
                   <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 5 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', flexShrink: 0, marginTop: 1 }}>#{v.numero || i+1}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>
-                      {v.descripcion || '(Sin descripción)'}
-                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'white', background: '#0f766e', borderRadius: 6, padding: '1px 7px', flexShrink: 0, marginTop: 1 }}>#{v.numero || i + 1}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>{v.descripcion || '(Sin descripción)'}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#64748b', flexWrap: 'wrap', marginBottom: total > 0 ? 8 : 0, paddingLeft: 22 }}>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#64748b', flexWrap: 'wrap', marginBottom: total > 0 ? 8 : 0, paddingLeft: 32 }}>
                     {v.fecha && <span>📅 {v.fecha}</span>}
                     {v.quorum && <span>⚖️ {v.quorum}</span>}
-                    {v.resultado && (
-                      <span style={{ color: v.resultado === 'Aprobado' ? '#10b981' : '#ef4444', fontWeight: 600 }}>
-                        {v.resultado === 'Aprobado' ? '✓' : '✗'} {v.resultado}
-                      </span>
-                    )}
+                    {v.resultado && <span style={{ color: v.resultado === 'Aprobado' ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                      {v.resultado === 'Aprobado' ? '✓' : '✗'} {v.resultado}
+                    </span>}
                   </div>
                   {total > 0 && (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingLeft: 22 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingLeft: 32 }}>
                       <div style={{ flex: 1, height: 7, borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', display: 'flex' }}>
-                        {v.totalSi > 0 && <div style={{ width: `${(v.totalSi/total)*100}%`, background: '#10b981' }} />}
-                        {v.totalAbs > 0 && <div style={{ width: `${(v.totalAbs/total)*100}%`, background: '#f59e0b' }} />}
-                        {v.totalNo > 0 && <div style={{ width: `${(v.totalNo/total)*100}%`, background: '#ef4444' }} />}
+                        {v.totalSi > 0 && <div style={{ width: `${(v.totalSi / total) * 100}%`, background: '#10b981' }} />}
+                        {v.totalAbs > 0 && <div style={{ width: `${(v.totalAbs / total) * 100}%`, background: '#f59e0b' }} />}
+                        {v.totalNo > 0 && <div style={{ width: `${(v.totalNo / total) * 100}%`, background: '#ef4444' }} />}
                       </div>
                       <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✓{v.totalSi}</span>
                       <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>✗{v.totalNo}</span>
@@ -245,7 +190,6 @@ export default function Votaciones() {
         </div>
       )}
 
-      {/* DETALLE */}
       {votacionSel && (
         <div style={S.card}>
           {loadingDetalle ? (
@@ -257,7 +201,6 @@ export default function Votaciones() {
                 {detalle.fecha && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>📅 {detalle.fecha}</div>}
               </div>
 
-              {/* Totales */}
               <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
                 {[
                   { label: 'A favor', value: detalle.resumen?.si, color: '#10b981', icon: '✓' },
@@ -271,22 +214,20 @@ export default function Votaciones() {
                 ))}
               </div>
 
-              {/* Barra global */}
               {detalle.votos.length > 0 && (() => {
                 const t = detalle.votos.length
-                const si  = detalle.votos.filter(v => v.opcion === 'Afirmativo').length
-                const no  = detalle.votos.filter(v => v.opcion === 'En Contra').length
+                const si = detalle.votos.filter(v => v.opcion === 'Afirmativo').length
+                const no = detalle.votos.filter(v => v.opcion === 'En Contra').length
                 const abs = detalle.votos.filter(v => v.opcion === 'Abstencion').length
                 return (
                   <div style={{ height: 12, borderRadius: 10, overflow: 'hidden', display: 'flex', marginBottom: 16 }}>
-                    <div style={{ width: `${(si/t)*100}%`, background: '#10b981' }} />
-                    <div style={{ width: `${(abs/t)*100}%`, background: '#f59e0b' }} />
-                    <div style={{ width: `${(no/t)*100}%`, background: '#ef4444' }} />
+                    <div style={{ width: `${(si / t) * 100}%`, background: '#10b981' }} />
+                    <div style={{ width: `${(abs / t) * 100}%`, background: '#f59e0b' }} />
+                    <div style={{ width: `${(no / t) * 100}%`, background: '#ef4444' }} />
                   </div>
                 )
               })()}
 
-              {/* Por partido */}
               {resumenPartido.length > 0 && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 10 }}>Desglose por partido</div>
@@ -297,13 +238,13 @@ export default function Votaciones() {
                         <div style={{ width: 10, height: 10, borderRadius: '50%', background: PARTIDO_COLORS[partido] || '#94a3b8', flexShrink: 0 }} />
                         <span style={{ fontSize: 12, fontWeight: 600, width: 110, color: '#0f172a', flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{partido}</span>
                         <div style={{ flex: 1, height: 10, borderRadius: 6, overflow: 'hidden', display: 'flex', background: '#e2e8f0' }}>
-                          {r.Si  > 0 && <div style={{ width: `${(r.Si/total)*100}%`, background: '#10b981' }} />}
-                          {r.Abs > 0 && <div style={{ width: `${(r.Abs/total)*100}%`, background: '#f59e0b' }} />}
-                          {r.No  > 0 && <div style={{ width: `${(r.No/total)*100}%`, background: '#ef4444' }} />}
+                          {r.Si > 0 && <div style={{ width: `${(r.Si / total) * 100}%`, background: '#10b981' }} />}
+                          {r.Abs > 0 && <div style={{ width: `${(r.Abs / total) * 100}%`, background: '#f59e0b' }} />}
+                          {r.No > 0 && <div style={{ width: `${(r.No / total) * 100}%`, background: '#ef4444' }} />}
                         </div>
                         <div style={{ display: 'flex', gap: 8, fontSize: 12, flexShrink: 0 }}>
-                          {r.Si  > 0 && <span style={{ color: '#10b981', fontWeight: 700 }}>✓{r.Si}</span>}
-                          {r.No  > 0 && <span style={{ color: '#ef4444', fontWeight: 700 }}>✗{r.No}</span>}
+                          {r.Si > 0 && <span style={{ color: '#10b981', fontWeight: 700 }}>✓{r.Si}</span>}
+                          {r.No > 0 && <span style={{ color: '#ef4444', fontWeight: 700 }}>✗{r.No}</span>}
                           {r.Abs > 0 && <span style={{ color: '#f59e0b', fontWeight: 700 }}>~{r.Abs}</span>}
                         </div>
                       </div>
@@ -312,14 +253,12 @@ export default function Votaciones() {
                 </div>
               )}
 
-              {/* Votos individuales */}
               <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 10 }}>
                 Votos individuales · {votosFiltrados.length} de {detalle.votos.length}
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
                 <input placeholder="🔍 Buscar por apellido..." value={busqueda}
-                  onChange={e => setBusqueda(e.target.value)}
-                  style={{ ...S.input, flex: 2, minWidth: 160 }} />
+                  onChange={e => setBusqueda(e.target.value)} style={{ ...S.input, flex: 2, minWidth: 160 }} />
                 <select value={filtroOpcion} onChange={e => setFiltroOpcion(e.target.value)} style={S.select}>
                   <option value="Todos">Todos los votos</option>
                   <option value="Afirmativo">A favor</option>
@@ -327,15 +266,13 @@ export default function Votaciones() {
                   <option value="Abstencion">Abstención</option>
                   <option value="No Vota">No vota</option>
                 </select>
-                {partidosEnVot.length > 0 && (
-                  <select value={filtroPartido} onChange={e => setFiltroPartido(e.target.value)} style={S.select}>
-                    <option value="Todos">Todos los partidos</option>
-                    {partidosEnVot.map(p => <option key={p}>{p}</option>)}
-                  </select>
-                )}
+                <select value={filtroPartido} onChange={e => setFiltroPartido(e.target.value)} style={S.select}>
+                  <option value="Todos">Todos los partidos</option>
+                  {partidosEnVot.map(p => <option key={p}>{p}</option>)}
+                </select>
                 <select value={orden} onChange={e => setOrden(e.target.value)} style={S.select}>
-                  <option value="partido">Ordenar por partido</option>
-                  <option value="alfabetico">Orden alfabético</option>
+                  <option value="partido">Agrupar por partido</option>
+                  <option value="apellido">Orden por apellido</option>
                   <option value="opcion">Ordenar por voto</option>
                 </select>
               </div>
@@ -344,15 +281,12 @@ export default function Votaciones() {
                 {votosFiltrados.map((v, i) => {
                   const color = OPCION_COLORS[v.opcion] || '#94a3b8'
                   const label = OPCION_LABELS[v.opcion] || v.opcion
-                  const partidoCorto = PARTIDO_MAP[v.partido] || v.partido
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: `${color}12`, border: `1px solid ${color}25` }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: PARTIDO_COLORS[partidoCorto] || '#94a3b8', flexShrink: 0 }} />
+                      <div style={{ width: 9, height: 9, borderRadius: '50%', background: PARTIDO_COLORS[v.partido] || '#94a3b8', flexShrink: 0, border: v.partido === 'Independiente' ? '1px solid #cbd5e1' : 'none' }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {v.diputado}
-                        </div>
-                        {partidoCorto && <div style={{ fontSize: 10, color: '#94a3b8' }}>{partidoCorto}</div>}
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.diputado}</div>
+                        <div style={{ fontSize: 10, color: '#94a3b8' }}>{v.partido}</div>
                       </div>
                       <span style={{ fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>{label}</span>
                     </div>
