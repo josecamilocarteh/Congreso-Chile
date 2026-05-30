@@ -74,6 +74,7 @@ function parsear(xml, tipo) {
   }
 
   if (tipo === 'detalle') {
+    // Descripción y totales desde los tags XML
     const articuloXml = (xml.match(/<Articulo[^>]*>([\s\S]*?)<\/Articulo>/i) || [])[1] || ''
     const descripcion = articuloXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
     const fecha = tag(xml, 'Fecha').split('T')[0]
@@ -81,19 +82,15 @@ function parsear(xml, tipo) {
     const totalNo = parseInt(tag(xml, 'TotalNegativos')) || 0
     const totalAbs = parseInt(tag(xml, 'TotalAbstenciones')) || 0
 
-    const votos = tagAll(xml, 'Voto')
-      .filter(function (v) { return v.indexOf('xsi:nil="true"') === -1 })
-      .map(function (v) {
-        const dipXml = (v.match(/<Diputado[^>]*>([\s\S]*?)<\/Diputado>/i) || [])[1] || ''
-        const n1 = tag(dipXml, 'Nombre')
-        const n2 = tag(dipXml, 'Nombre2')
-        const apP = tag(dipXml, 'ApellidoPaterno')
-        const apM = tag(dipXml, 'ApellidoMaterno')
-        let nombre = [n1, n2].filter(Boolean).join(' ')
-        if (apP) nombre += ' ' + apP
-        if (apM) nombre += ' ' + apM
-        return { diputado: nombre.trim(), opcion: tag(v, 'OpcionVoto') }
-      })
+    // Los votos individuales: quitar todas las etiquetas XML y leer texto plano
+    // Formato: "ID Nombre Apellido1 Apellido2 Opcion"
+    const texto = xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    const votos = []
+    const patron = /(\d{3,4})\s+((?:[A-ZÁÉÍÓÚÑÜ][a-záéíóúñüà]+(?:\s+y)?\s+)+)(Afirmativo|En Contra|Abstencion|No Vota|Dispensado|Pareo)/g
+    let m
+    while ((m = patron.exec(texto)) !== null) {
+      votos.push({ diputado: m[2].trim(), opcion: m[3] })
+    }
 
     return { tipo: 'detalle', descripcion: descripcion, fecha: fecha, votos: votos, resumen: { si: totalSi, no: totalNo, abs: totalAbs } }
   }
