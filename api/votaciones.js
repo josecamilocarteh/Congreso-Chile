@@ -1,81 +1,201 @@
-import { useState } from 'react'
-import Senado from './components/Senado'
-import Diputados from './components/Diputados'
-import SimuladorQuorum from './components/SimuladorQuorum'
-import Votaciones from './components/Votaciones'
-import VotacionesSenado from './components/VotacionesSenado'
-import VotacionesDia from './components/VotacionesDia'
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
 
-export default function App() {
-  const [tab, setTab] = useState('senado')
+  const boletin = req.query.boletin
+  const votacionId = req.query.votacionId
+  const BASE = 'https://opendata.congreso.cl/wscamaradiputados.asmx'
 
-  return (
-    <div style={{ fontFamily: "'Inter', sans-serif", minHeight: '100vh', background: '#f1f5f9' }}>
-      {/* HEADER */}
-      <header style={styles.header}>
-        <div style={styles.headerInner}>
-          <div>
-            <div style={styles.eyebrow}>República de Chile</div>
-            <h1 style={styles.title}>Congreso Nacional</h1>
-            <div style={styles.subtitle}>Período Legislativo 2026–2030</div>
-          </div>
-          <div style={styles.tabs}>
-            <button
-              onClick={() => setTab('senado')}
-              style={{ ...styles.tabBtn, ...(tab === 'senado' ? styles.tabActive : styles.tabInactive) }}>
-              🏛 Senado
-            </button>
-            <button
-              onClick={() => setTab('diputados')}
-              style={{ ...styles.tabBtn, ...(tab === 'diputados' ? styles.tabActive : styles.tabInactive) }}>
-              🏢 Cámara de Diputados
-            </button>
-            <button
-              onClick={() => setTab('simulador')}
-              style={{ ...styles.tabBtn, ...(tab === 'simulador' ? { ...styles.tabActive, background: '#7c3aed' } : styles.tabInactive) }}>
-              ⚖️ Simulador de Quórums
-            </button>
-            <button
-              onClick={() => setTab('votaciones')}
-              style={{ ...styles.tabBtn, ...(tab === 'votaciones' ? { ...styles.tabActive, background: '#0f766e' } : styles.tabInactive) }}>
-              🗳 Votaciones Cámara
-            </button>
-            <button
-              onClick={() => setTab('votsenado')}
-              style={{ ...styles.tabBtn, ...(tab === 'votsenado' ? { ...styles.tabActive, background: '#7c3aed' } : styles.tabInactive) }}>
-              🏛 Votaciones Senado
-            </button>
-            <button
-              onClick={() => setTab('votdia')}
-              style={{ ...styles.tabBtn, ...(tab === 'votdia' ? { ...styles.tabActive, background: '#0f766e' } : styles.tabInactive) }}>
-              🗓 Votaciones por día
-            </button>
-          </div>
-        </div>
-      </header>
+  try {
+    let url = ''
+    let tipo = ''
 
-      {/* CONTENT */}
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 20px 60px' }}>
-        {tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : tab === 'simulador' ? <SimuladorQuorum /> : tab === 'votaciones' ? <Votaciones /> : tab === 'votsenado' ? <VotacionesSenado /> : <VotacionesDia />}
-      </main>
+    const proyecto = req.query.proyecto
 
-      {/* FOOTER */}
-      <footer style={styles.footer}>
-        Sitio creado por José Camilo Carte Hernández, Asesor Legislativo.
-      </footer>
-    </div>
-  )
+    // Datos del proyecto desde la API del Senado
+    if (proyecto) {
+      const num = String(proyecto).split('-')[0]
+      const urlSenado = 'https://tramitacion.senado.cl/wspublico/tramitacion.php?boletin=' + num
+      const r = await fetch(urlSenado)
+      if (!r.ok) return res.status(200).json({ error: 'API Senado código ' + r.status })
+      const xmlS = await r.text()
+      return res.status(200).json(parsearProyecto(xmlS))
+    }
+
+    // Votaciones de la Cámara por AÑO (lista por día) — API opendata.camara.cl
+    if (req.query.votacionesAnio) {
+      const anno = String(req.query.votacionesAnio).replace(/[^0-9]/g, '') || '2026'
+      const urlA = 'https://opendata.camara.cl/camaradiputados/WServices/WSLegislativo.asmx/retornarVotacionesXAnno?prmAnno=' + anno
+      const r = await fetch(urlA)
+      if (!r.ok) return res.status(200).json({ error: 'API Cámara código ' + r.status })
+      const xmlA = await r.text()
+      return res.status(200).json(parsearAnio(xmlA))
+    }
+
+    // Votaciones del Senado por boletín
+    if (req.query.senado) {
+      const num = String(req.query.senado).split('-')[0]
+      const urlV = 'https://tramitacion.senado.cl/wspublico/votaciones.php?boletin=' + num
+      const r = await fetch(urlV)
+      if (!r.ok) return res.status(200).json({ error: 'API Senado código ' + r.status })
+      const xmlV = await r.text()
+      return res.status(200).json(parsearSenado(xmlV))
+    }
+
+    if (votacionId) {
+      url = BASE + '/getVotacion_Detalle?prmVotacionId=' + votacionId
+      tipo = 'detalle'
+    } else if (boletin) {
+      url = BASE + '/getVotaciones_Boletin?prmBoletin=' + boletin
+      tipo = 'boletin'
+    } else {
+      return res.status(400).json({ error: 'Falta el parámetro boletin, votacionId o proyecto' })
+    }
+
+    const resp = await fetch(url)
+    if (!resp.ok) {
+      return res.status(200).json({ error: 'La API del Congreso respondió con código ' + resp.status })
+    }
+
+    const xml = await resp.text()
+    const data = parsear(xml, tipo)
+    return res.status(200).json(data)
+
+  } catch (e) {
+    return res.status(200).json({ error: 'Error al consultar: ' + e.message })
+  }
 }
 
-const styles = {
-  header: { background: 'white', borderBottom: '1px solid #e2e8f0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)' },
-  headerInner: { maxWidth: 1100, margin: '0 auto', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 },
-  eyebrow: { fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: '#64748b', marginBottom: 2, fontWeight: 600 },
-  title: { fontSize: 24, fontWeight: 700, color: '#0f172a', fontFamily: "'Playfair Display', serif" },
-  subtitle: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
-  tabs: { display: 'flex', gap: 8 },
-  tabBtn: { padding: '9px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, fontFamily: "'Inter', sans-serif", transition: 'all 0.15s' },
-  tabActive: { background: '#1e40af', color: 'white', boxShadow: '0 2px 8px rgba(30,64,175,0.3)' },
-  tabInactive: { background: '#f1f5f9', color: '#475569' },
-  footer: { textAlign: 'center', padding: '24px 20px 32px', fontSize: 13, color: '#94a3b8', borderTop: '1px solid #e2e8f0' },
+function tag(str, name) {
+  const re = new RegExp('<' + name + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + name + '>', 'i')
+  const m = str.match(re)
+  return m ? m[1].trim() : ''
+}
+
+function tagAll(str, name) {
+  const re = new RegExp('<' + name + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + name + '>', 'gi')
+  const out = []
+  let m
+  while ((m = re.exec(str)) !== null) out.push(m[1].trim())
+  return out
+}
+
+function limpiar(s) {
+  return (s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function parsearAnio(xml) {
+  const votaciones = tagAll(xml, 'Votacion').map(function (v) {
+    // Quitar el bloque de votos individuales para aligerar y evitar tags anidados
+    const vc = v.replace(/<Votos>[\s\S]*?<\/Votos>/i, '')
+    const fechaRaw = limpiar(tag(vc, 'Fecha'))
+    return {
+      id: limpiar(tag(vc, 'Id')),
+      fechaHora: fechaRaw,
+      fecha: (fechaRaw.split('T')[0] || fechaRaw).slice(0, 10),
+      descripcion: limpiar(tag(vc, 'Descripcion')),
+      resultado: limpiar(tag(vc, 'Resultado')),
+      tipo: limpiar(tag(vc, 'Tipo')),
+      quorum: limpiar(tag(vc, 'Quorum')),
+      totalSi: parseInt(tag(vc, 'TotalSi')) || 0,
+      totalNo: parseInt(tag(vc, 'TotalNo')) || 0,
+      totalAbs: parseInt(tag(vc, 'TotalAbstencion')) || 0,
+      totalDisp: parseInt(tag(vc, 'TotalDispensado')) || 0
+    }
+  })
+  votaciones.sort(function (a, b) { return (b.fechaHora || '').localeCompare(a.fechaHora || '') })
+  return { tipo: 'anio', votaciones: votaciones }
+}
+
+function parsearSenado(xml) {
+  const votaciones = tagAll(xml, 'votacion').map(function (v) {
+    const detalleXml = (v.match(/<DETALLE_VOTACION>([\s\S]*?)<\/DETALLE_VOTACION>/i) || [])[1] || ''
+    const votos = tagAll(detalleXml, 'VOTO').map(function (vt) {
+      return {
+        parlamentario: limpiar(tag(vt, 'PARLAMENTARIO')),
+        seleccion: limpiar(tag(vt, 'SELECCION'))
+      }
+    })
+    return {
+      sesion: limpiar(tag(v, 'SESION')),
+      fecha: limpiar(tag(v, 'FECHA')),
+      tema: limpiar(tag(v, 'TEMA')),
+      si: parseInt(tag(v, 'SI')) || 0,
+      no: parseInt(tag(v, 'NO')) || 0,
+      abstencion: parseInt(tag(v, 'ABSTENCION')) || 0,
+      pareo: parseInt(tag(v, 'PAREO')) || 0,
+      quorum: limpiar(tag(v, 'QUORUM')),
+      tipoVotacion: limpiar(tag(v, 'TIPOVOTACION')),
+      etapa: limpiar(tag(v, 'ETAPA')),
+      votos: votos
+    }
+  })
+  return { tipo: 'senado', votaciones: votaciones }
+}
+
+function parsearProyecto(xml) {
+  // Solo el primer <descripcion> (datos del proyecto)
+  const desc = (xml.match(/<descripcion>([\s\S]*?)<\/descripcion>/i) || [])[1] || ''
+  return {
+    tipo: 'proyecto',
+    boletin: limpiar(tag(desc, 'boletin')),
+    titulo: limpiar(tag(desc, 'titulo')),
+    fechaIngreso: limpiar(tag(desc, 'fecha_ingreso')),
+    iniciativa: limpiar(tag(desc, 'iniciativa')),
+    camaraOrigen: limpiar(tag(desc, 'camara_origen')),
+    urgencia: limpiar(tag(desc, 'urgencia_actual')),
+    etapa: limpiar(tag(desc, 'etapa')),
+    subetapa: limpiar(tag(desc, 'subetapa')),
+    estado: limpiar(tag(desc, 'estado')),
+  }
+}
+
+function parsear(xml, tipo) {
+
+  if (tipo === 'boletin') {
+    let votaciones = tagAll(xml, 'Votacion').map(function (v) {
+      const sesionXml = (v.match(/<Sesion[^>]*>([\s\S]*?)<\/Sesion>/i) || [])[1] || ''
+      const articuloXml = (v.match(/<Articulo[^>]*>([\s\S]*?)<\/Articulo>/i) || [])[1] || ''
+      const descripcion = articuloXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      return {
+        id: tag(v, 'ID'),
+        fechaHora: tag(v, 'Fecha'),
+        fecha: tag(v, 'Fecha').split('T')[0],
+        resultado: tag(v, 'Resultado'),
+        quorum: tag(v, 'Quorum'),
+        boletin: tag(v, 'Boletin'),
+        descripcion: descripcion,
+        sesionId: tag(sesionXml, 'ID'),
+        totalSi: parseInt(tag(v, 'TotalAfirmativos')) || 0,
+        totalNo: parseInt(tag(v, 'TotalNegativos')) || 0,
+        totalAbs: parseInt(tag(v, 'TotalAbstenciones')) || 0
+      }
+    })
+    votaciones.sort(function (a, b) { return a.fechaHora.localeCompare(b.fechaHora) })
+    votaciones = votaciones.map(function (v, i) { v.numero = i + 1; return v })
+    return { tipo: 'boletin', votaciones: votaciones }
+  }
+
+  if (tipo === 'detalle') {
+    // Descripción y totales desde los tags XML
+    const articuloXml = (xml.match(/<Articulo[^>]*>([\s\S]*?)<\/Articulo>/i) || [])[1] || ''
+    const descripcion = articuloXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    const fecha = tag(xml, 'Fecha').split('T')[0]
+    const totalSi = parseInt(tag(xml, 'TotalAfirmativos')) || 0
+    const totalNo = parseInt(tag(xml, 'TotalNegativos')) || 0
+    const totalAbs = parseInt(tag(xml, 'TotalAbstenciones')) || 0
+
+    // Los votos individuales: quitar todas las etiquetas XML y leer texto plano
+    // Formato: "ID Nombre Apellido1 Apellido2 Opcion"
+    const texto = xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    const votos = []
+    const patron = /(\d{3,4})\s+((?:[A-ZÁÉÍÓÚÑÜ][a-záéíóúñüà]+(?:\s+y)?\s+)+)(Afirmativo|En Contra|Abstencion|No Vota|Dispensado|Pareo)/g
+    let m
+    while ((m = patron.exec(texto)) !== null) {
+      votos.push({ diputado: m[2].trim(), opcion: m[3] })
+    }
+
+    return { tipo: 'detalle', descripcion: descripcion, fecha: fecha, votos: votos, resumen: { si: totalSi, no: totalNo, abs: totalAbs } }
+  }
+
+  return { error: 'Tipo desconocido' }
 }
