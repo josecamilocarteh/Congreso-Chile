@@ -4,6 +4,7 @@ import Diputados from './components/Diputados'
 import SimuladorQuorum from './components/SimuladorQuorum'
 import Votaciones from './components/Votaciones'
 import VotacionesSenado from './components/VotacionesSenado'
+import VotacionesDia from './components/VotacionesDia'
 
 export default function App() {
   const [tab, setTab] = useState('senado')
@@ -44,14 +45,24 @@ export default function App() {
               style={{ ...styles.tabBtn, ...(tab === 'votsenado' ? { ...styles.tabActive, background: '#7c3aed' } : styles.tabInactive) }}>
               🏛 Votaciones Senado
             </button>
+            <button
+              onClick={() => setTab('votdia')}
+              style={{ ...styles.tabBtn, ...(tab === 'votdia' ? { ...styles.tabActive, background: '#0f766e' } : styles.tabInactive) }}>
+              🗓 Votaciones por día
+            </button>
           </div>
         </div>
       </header>
 
       {/* CONTENT */}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 20px 60px' }}>
-        {tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : tab === 'simulador' ? <SimuladorQuorum /> : tab === 'votaciones' ? <Votaciones /> : <VotacionesSenado />}
+        {tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : tab === 'simulador' ? <SimuladorQuorum /> : tab === 'votaciones' ? <Votaciones /> : tab === 'votsenado' ? <VotacionesSenado /> : <VotacionesDia />}
       </main>
+
+      {/* FOOTER */}
+      <footer style={styles.footer}>
+        Sitio creado por José Camilo Carte Hernández, Asesor Legislativo.
+      </footer>
     </div>
   )
 }
@@ -66,4 +77,5 @@ const styles = {
   tabBtn: { padding: '9px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, fontFamily: "'Inter', sans-serif", transition: 'all 0.15s' },
   tabActive: { background: '#1e40af', color: 'white', boxShadow: '0 2px 8px rgba(30,64,175,0.3)' },
   tabInactive: { background: '#f1f5f9', color: '#475569' },
+  footer: { textAlign: 'center', padding: '24px 20px 32px', fontSize: 13, color: '#94a3b8', borderTop: '1px solid #e2e8f0' },
 }
