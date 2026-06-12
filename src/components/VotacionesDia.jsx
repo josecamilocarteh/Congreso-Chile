@@ -7,6 +7,7 @@ const CONECTORES = new Set(['y', 'de', 'del', 'la', 'las', 'los'])
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 const TABLA_SEMANAL_URL = 'https://www.camara.cl/verDoc.aspx?prmId=0&prmTipo=TABLASEMANAL'
+const TABLA_DIA_URL = 'https://www.camara.cl/legislacion/sesiones_sala/sesiones_sala.aspx'
 
 function norm(s) {
   return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -64,7 +65,8 @@ export default function VotacionesDia() {
         if (!activo) return
         const vs = data.votaciones || []
         setTodas(vs)
-        if (vs.length) setFecha(vs[0].fecha)   // ya vienen ordenadas desc
+        const fechasU = [...new Set(vs.map(v => v.fecha))].sort()
+        if (fechasU.length) setFecha(fechasU[fechasU.length - 1])   // día más reciente
       } catch (e) { if (activo) setError(e.message) }
       if (activo) setLoading(false)
     })()
@@ -72,7 +74,10 @@ export default function VotacionesDia() {
   }, [])
 
   const fechasConVotaciones = [...new Set(todas.map(v => v.fecha))].sort().reverse()
-  const delDia = todas.filter(v => v.fecha === fecha)
+  const delDia = todas
+    .filter(v => v.fecha === fecha)
+    .sort((a, b) => (a.fechaHora || '').localeCompare(b.fechaHora || '') || (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
+    .map((v, i) => ({ ...v, numero: i + 1 }))
 
   async function toggleDetalle(v) {
     if (expandId === v.id) { setExpandId(null); return }
@@ -96,11 +101,15 @@ export default function VotacionesDia() {
 
   return (
     <div>
-      {/* AGENDA / TABLA SEMANAL */}
+      {/* AGENDA / TABLAS */}
       <div style={{ ...S.card, borderLeft: '4px solid #0f766e' }}>
-        <div style={S.title}>🗓 Próxima sesión · Tabla de la semana</div>
-        <div style={S.sub}>Lo que se va a votar. La agenda oficial se publica por semana (no por fecha arbitraria), así que aquí va la Tabla Semanal vigente de la Cámara.</div>
-        <a href={TABLA_SEMANAL_URL} target="_blank" rel="noreferrer" style={S.btnLink}>📄 Abrir Tabla Semanal oficial →</a>
+        <div style={S.title}>🗓 Agenda · Lo que se va a votar</div>
+        <div style={S.sub}>La agenda oficial se publica por sesión y por semana (no como dato por fecha arbitraria). Aquí tienes los dos documentos oficiales de la Cámara:</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <a href={TABLA_SEMANAL_URL} target="_blank" rel="noreferrer" style={S.btnLink}>📅 Tabla Semanal →</a>
+          <a href={TABLA_DIA_URL} target="_blank" rel="noreferrer" style={{ ...S.btnLink, background: '#0e7490' }}>📄 Tabla y Orden del Día por sesión →</a>
+        </div>
+        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 10 }}>La "Tabla y Orden del Día por sesión" abre la página oficial de sesiones de sala, donde cada sesión tiene su tabla, cuenta y documentos del día.</div>
       </div>
 
       {/* VOTACIONES POR DÍA */}
@@ -166,13 +175,16 @@ export default function VotacionesDia() {
               <div key={v.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
                 <div onClick={() => toggleDetalle(v)} style={{ padding: '12px 14px', cursor: 'pointer', background: abierto ? '#f8fafc' : 'white' }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: '#0f766e', background: '#ccfbf1', borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2, minWidth: 26, textAlign: 'center' }}>
+                      #{v.numero}
+                    </span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: 'white', background: colorResultado(v.resultado), borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2 }}>
                       {v.resultado || '—'}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 500 }}>{v.descripcion || '(Sin descripción)'}</div>
+                      <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 500 }}>{v.descripcion || v.tipo || '(Sin descripción registrada)'}</div>
                       <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                        {v.tipo ? v.tipo + ' · ' : ''}{v.quorum ? 'Quórum: ' + v.quorum : ''}
+                        {v.tipo && v.descripcion ? v.tipo + ' · ' : ''}{v.quorum ? 'Quórum: ' + v.quorum : ''}
                       </div>
                     </div>
                     <span style={{ fontSize: 14, color: '#94a3b8', flexShrink: 0 }}>{abierto ? '▲' : '▼'}</span>
