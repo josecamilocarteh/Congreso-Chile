@@ -102,7 +102,11 @@ function parsearAnio(xml) {
       totalDisp: parseInt(tag(vc, 'TotalDispensado')) || 0
     }
   })
-  votaciones.sort(function (a, b) { return (b.fechaHora || '').localeCompare(a.fechaHora || '') })
+  votaciones.sort(function (a, b) {
+    const f = (a.fechaHora || '').localeCompare(b.fechaHora || '')
+    if (f !== 0) return f
+    return (parseInt(a.id) || 0) - (parseInt(b.id) || 0)
+  })
   return { tipo: 'anio', votaciones: votaciones }
 }
 
