@@ -44,6 +44,10 @@ function colorResultado(r) {
   if (t.includes('rechaz')) return '#ef4444'
   return '#64748b'
 }
+function boletinDe(texto) {
+  const m = (texto || '').match(/(\d{4,6}-\d{2})/)
+  return m ? m[1] : null
+}
 
 export default function VotacionesDia() {
   const [loading, setLoading] = useState(true)
@@ -53,6 +57,7 @@ export default function VotacionesDia() {
   const [expandId, setExpandId] = useState(null)
   const [detalles, setDetalles] = useState({})        // cache por id
   const [loadingDet, setLoadingDet] = useState(null)
+  const [titulos, setTitulos] = useState({})          // cache por boletín → título
 
   useEffect(() => {
     let activo = true
@@ -79,20 +84,55 @@ export default function VotacionesDia() {
     .sort((a, b) => (a.fechaHora || '').localeCompare(b.fechaHora || '') || (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
     .map((v, i) => ({ ...v, numero: i + 1 }))
 
+  // Buscar el título del proyecto (por boletín) de las votaciones del día
+  useEffect(() => {
+    let activo = true
+    const boletines = [...new Set(delDia.map(v => boletinDe(v.descripcion)).filter(Boolean))]
+      .filter(b => titulos[b] === undefined)
+    if (boletines.length === 0) return
+    // marcar como "cargando" para no repetir
+    setTitulos(prev => { const n = { ...prev }; boletines.forEach(b => { if (n[b] === undefined) n[b] = null }); return n })
+    boletines.forEach(async (b) => {
+      try {
+        const res = await fetch(`/api/votaciones?proyecto=${b}`)
+        const data = await res.json()
+        if (!activo) return
+        setTitulos(prev => ({ ...prev, [b]: (data && data.titulo) ? data.titulo : '' }))
+      } catch {
+        if (activo) setTitulos(prev => ({ ...prev, [b]: '' }))
+      }
+    })
+    return () => { activo = false }
+  }, [fecha, todas])  // eslint-disable-line
+
+  function enriquecer(votos) {
+    return (votos || []).map(voto => {
+      const dip = buscarDiputado(voto.diputado)
+      return { ...voto, partido: dip?.partido || 'Sin partido', apellido: apellidoDe(dip?.nombre || voto.diputado) }
+    })
+  }
+
   async function toggleDetalle(v) {
     if (expandId === v.id) { setExpandId(null); return }
     setExpandId(v.id)
     if (detalles[v.id]) return
     setLoadingDet(v.id)
     try {
-      const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      const votos = (data.votos || []).map(voto => {
-        const dip = buscarDiputado(voto.diputado)
-        return { ...voto, partido: dip?.partido || 'Sin partido', apellido: apellidoDe(dip?.nombre || voto.diputado) }
-      })
-      setDetalles(prev => ({ ...prev, [v.id]: { votos } }))
+      // 1) Intentar la API de detalle (votaciones de ley)
+      let votos = []
+      try {
+        const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
+        const data = await res.json()
+        if (!data.error) votos = data.votos || []
+      } catch { /* sigue al fallback */ }
+      // 2) Si no hay votos (ej. acuerdos/resoluciones), usar la API nueva del año
+      if (votos.length === 0) {
+        const año = (v.fecha || '2026').slice(0, 4)
+        const res2 = await fetch(`/api/votaciones?detalleAnio=${v.id}&anio=${año}`)
+        const data2 = await res2.json()
+        if (!data2.error) votos = data2.votos || []
+      }
+      setDetalles(prev => ({ ...prev, [v.id]: { votos: enriquecer(votos) } }))
     } catch (e) {
       setDetalles(prev => ({ ...prev, [v.id]: { error: e.message } }))
     }
@@ -171,6 +211,9 @@ export default function VotacionesDia() {
             const total = v.totalSi + v.totalNo + v.totalAbs
             const abierto = expandId === v.id
             const det = detalles[v.id]
+            const bol = boletinDe(v.descripcion)
+            const titProy = bol ? titulos[bol] : undefined
+            const headline = (titProy && titProy.length) ? titProy : (v.descripcion || v.tipo || '(Sin descripción registrada)')
             return (
               <div key={v.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
                 <div onClick={() => toggleDetalle(v)} style={{ padding: '12px 14px', cursor: 'pointer', background: abierto ? '#f8fafc' : 'white' }}>
@@ -182,9 +225,15 @@ export default function VotacionesDia() {
                       {v.resultado || '—'}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 500 }}>{v.descripcion || v.tipo || '(Sin descripción registrada)'}</div>
-                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                        {v.tipo && v.descripcion ? v.tipo + ' · ' : ''}{v.quorum ? 'Quórum: ' + v.quorum : ''}
+                      <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 600, lineHeight: 1.35 }}>{headline}</div>
+                      {titProy && titProy.length && v.descripcion && v.descripcion !== headline && (
+                        <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>{v.descripcion}</div>
+                      )}
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {bol && <span style={{ fontWeight: 700, color: '#0f766e' }}>Boletín {bol}</span>}
+                        {bol && titulos[bol] === null && <span>buscando título…</span>}
+                        {v.tipo && <span>{v.tipo}</span>}
+                        {v.quorum && <span>Quórum: {v.quorum}</span>}
                       </div>
                     </div>
                     <span style={{ fontSize: 14, color: '#94a3b8', flexShrink: 0 }}>{abierto ? '▲' : '▼'}</span>
