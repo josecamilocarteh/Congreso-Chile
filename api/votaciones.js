@@ -31,6 +31,18 @@ export default async function handler(req, res) {
       return res.status(200).json(parsearAnio(xmlA))
     }
 
+    // Detalle (votos individuales) de UNA votación, desde la API nueva del año
+    // Sirve para TODOS los tipos, incluidos acuerdos y resoluciones
+    if (req.query.detalleAnio) {
+      const idv = String(req.query.detalleAnio).replace(/[^0-9]/g, '')
+      const anno = String(req.query.anio || '2026').replace(/[^0-9]/g, '') || '2026'
+      const urlD = 'https://opendata.camara.cl/camaradiputados/WServices/WSLegislativo.asmx/retornarVotacionesXAnno?prmAnno=' + anno
+      const r = await fetch(urlD)
+      if (!r.ok) return res.status(200).json({ error: 'API Cámara código ' + r.status })
+      const xmlD = await r.text()
+      return res.status(200).json(parsearDetalleAnio(xmlD, idv))
+    }
+
     // Votaciones del Senado por boletín
     if (req.query.senado) {
       const num = String(req.query.senado).split('-')[0]
@@ -108,6 +120,38 @@ function parsearAnio(xml) {
     return (parseInt(a.id) || 0) - (parseInt(b.id) || 0)
   })
   return { tipo: 'anio', votaciones: votaciones }
+}
+
+function normOpcion(s) {
+  const t = limpiar(s).toLowerCase()
+  if (!t) return ''
+  if (t.indexOf('afirm') >= 0 || t === 'si' || t === 'sí' || t.indexOf('a favor') >= 0) return 'Afirmativo'
+  if (t.indexOf('contra') >= 0 || t === 'no' || t.indexOf('rechaz') >= 0) return 'En Contra'
+  if (t.indexOf('absten') >= 0) return 'Abstencion'
+  if (t.indexOf('no vot') >= 0) return 'No Vota'
+  if (t.indexOf('dispen') >= 0) return 'Dispensado'
+  if (t.indexOf('pareo') >= 0 || t.indexOf('paread') >= 0) return 'Pareo'
+  return limpiar(s)
+}
+
+function parsearDetalleAnio(xml, id) {
+  const bloques = tagAll(xml, 'Votacion')
+  let target = ''
+  for (let i = 0; i < bloques.length; i++) {
+    const b = bloques[i]
+    const head = b.split('<Votos>')[0]
+    if (limpiar(tag(head, 'Id')) === id) { target = b; break }
+  }
+  if (!target) return { tipo: 'detalleAnio', encontrado: false, votos: [] }
+  const votosXml = (target.match(/<Votos>([\s\S]*?)<\/Votos>/i) || [])[1] || ''
+  const votos = tagAll(votosXml, 'Voto').map(function (vt) {
+    const dip = tag(vt, 'Diputado')
+    let nombre = [tag(dip, 'Nombre'), tag(dip, 'ApellidoPaterno'), tag(dip, 'ApellidoMaterno')]
+      .map(limpiar).filter(Boolean).join(' ').trim()
+    if (!nombre) nombre = limpiar(dip)
+    return { diputado: nombre, opcion: normOpcion(tag(vt, 'OpcionVoto')) }
+  }).filter(function (x) { return x.diputado })
+  return { tipo: 'detalleAnio', encontrado: true, votos: votos }
 }
 
 function parsearSenado(xml) {
