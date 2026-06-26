@@ -49,7 +49,18 @@ export default async function handler(req, res) {
     if (req.query.camaraDetalle) {
       const idc = String(req.query.camaraDetalle).replace(/[^0-9]/g, '')
       const urlC = 'https://www.camara.cl/legislacion/sala_sesiones/votacion_detalle.aspx?prmIdVotacion=' + idc
-      const r = await fetch(urlC, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+      const r = await fetch(urlC, { headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'es-CL,es;q=0.9,en;q=0.8',
+        'Referer': 'https://www.camara.cl/legislacion/sala_sesiones/votaciones.aspx',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0'
+      } })
       if (!r.ok) return res.status(200).json({ error: 'Página Cámara código ' + r.status })
       const htmlC = await r.text()
       return res.status(200).json(parsearCamaraDetalle(htmlC))
