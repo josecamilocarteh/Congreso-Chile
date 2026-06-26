@@ -48,6 +48,23 @@ function boletinDe(texto) {
   const m = (texto || '').match(/(\d{4,6}-\d{2})/)
   return m ? m[1] : null
 }
+function faseDe(texto) {
+  const t = (texto || '').toLowerCase()
+  if (t.includes('particular')) return { label: 'En particular', color: '#7c3aed' }
+  if (t.includes('general')) return { label: 'En general', color: '#0e7490' }
+  return null
+}
+// Nombres femeninos que NO terminan en 'a' (para no fallar con Consuelo, Carmen, Karol, etc.)
+const FEM_EXTRA = new Set(['carmen', 'beatriz', 'isabel', 'consuelo', 'maite', 'raquel', 'marisol', 'nancy', 'karen', 'nathalie', 'mercedes', 'pilar', 'ines', 'soledad', 'ruth', 'sol', 'luz', 'flor', 'karol', 'belen', 'noemi', 'jael', 'damaris', 'ester', 'esther', 'lourdes', 'dolores', 'nieves', 'cruz', 'paz', 'leonor', 'marlene'])
+// Nombres masculinos que terminan en 'a' (excepciones a la regla)
+const MASC_EXTRA = new Set(['joshua', 'elia', 'aldo', 'bauista'])
+function inferSexo(nombre) {
+  const first = norm(nombre).split(' ').filter(Boolean)[0] || ''
+  if (!first) return ''
+  if (FEM_EXTRA.has(first)) return 'F'
+  if (MASC_EXTRA.has(first)) return 'M'
+  return first.endsWith('a') ? 'F' : 'M'
+}
 
 export default function VotacionesDia() {
   const [loading, setLoading] = useState(true)
@@ -58,6 +75,7 @@ export default function VotacionesDia() {
   const [detalles, setDetalles] = useState({})        // cache por id
   const [loadingDet, setLoadingDet] = useState(null)
   const [titulos, setTitulos] = useState({})          // cache por boletín → título
+  const [articulos, setArticulos] = useState({})      // cache por votaciónId → descripción (Articulo) del proyecto
 
   useEffect(() => {
     let activo = true
@@ -84,7 +102,7 @@ export default function VotacionesDia() {
     .sort((a, b) => (a.fechaHora || '').localeCompare(b.fechaHora || '') || (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
     .map((v, i) => ({ ...v, numero: i + 1 }))
 
-  // Buscar el título del proyecto (por boletín) de las votaciones del día
+  // Para cada boletín del día: buscar el título del proyecto y el detalle por votación (general/particular/artículo)
   useEffect(() => {
     let activo = true
     const boletines = [...new Set(delDia.map(v => boletinDe(v.descripcion)).filter(Boolean))]
@@ -93,14 +111,26 @@ export default function VotacionesDia() {
     // marcar como "cargando" para no repetir
     setTitulos(prev => { const n = { ...prev }; boletines.forEach(b => { if (n[b] === undefined) n[b] = null }); return n })
     boletines.forEach(async (b) => {
+      // Título del proyecto (API Senado)
       try {
         const res = await fetch(`/api/votaciones?proyecto=${b}`)
         const data = await res.json()
-        if (!activo) return
-        setTitulos(prev => ({ ...prev, [b]: (data && data.titulo) ? data.titulo : '' }))
+        if (activo) setTitulos(prev => ({ ...prev, [b]: (data && data.titulo) ? data.titulo : '' }))
       } catch {
         if (activo) setTitulos(prev => ({ ...prev, [b]: '' }))
       }
+      // Descripción por votación: general / particular / artículo (API Cámara por boletín)
+      try {
+        const res2 = await fetch(`/api/votaciones?boletin=${b}`)
+        const data2 = await res2.json()
+        if (activo && data2 && data2.votaciones) {
+          setArticulos(prev => {
+            const n = { ...prev }
+            data2.votaciones.forEach(vt => { if (vt.id) n[String(vt.id)] = vt.descripcion || '' })
+            return n
+          })
+        }
+      } catch { /* sin detalle por boletín */ }
     })
     return () => { activo = false }
   }, [fecha, todas])  // eslint-disable-line
@@ -108,7 +138,15 @@ export default function VotacionesDia() {
   function enriquecer(votos) {
     return (votos || []).map(voto => {
       const dip = buscarDiputado(voto.diputado)
-      return { ...voto, partido: dip?.partido || 'Sin partido', apellido: apellidoDe(dip?.nombre || voto.diputado) }
+      return {
+        ...voto,
+        partido: dip?.partido || 'Sin partido',
+        apellido: apellidoDe(dip?.nombre || voto.diputado),
+        region: dip?.region || '',
+        distrito: dip?.distrito != null ? dip.distrito : '',
+        bloque: dip?.bloque || '',
+        sexo: dip ? inferSexo(dip.nombre) : ''
+      }
     })
   }
 
@@ -213,6 +251,8 @@ export default function VotacionesDia() {
             const det = detalles[v.id]
             const bol = boletinDe(v.descripcion)
             const titProy = bol ? titulos[bol] : undefined
+            const artic = articulos[String(v.id)]                 // descripción detallada (Articulo) por votación
+            const fase = faseDe(artic || v.descripcion || v.tipo)  // general / particular
             const headline = (titProy && titProy.length) ? titProy : (v.descripcion || v.tipo || '(Sin descripción registrada)')
             return (
               <div key={v.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
@@ -225,14 +265,20 @@ export default function VotacionesDia() {
                       {v.resultado || '—'}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 3 }}>
+                        {fase && <span style={{ fontSize: 10.5, fontWeight: 800, color: 'white', background: fase.color, borderRadius: 5, padding: '1px 7px', textTransform: 'uppercase', letterSpacing: 0.4 }}>{fase.label}</span>}
+                      </div>
                       <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 600, lineHeight: 1.35 }}>{headline}</div>
-                      {titProy && titProy.length && v.descripcion && v.descripcion !== headline && (
+                      {artic && artic.length > 0 ? (
+                        <div style={{ fontSize: 12, color: '#334155', marginTop: 3, lineHeight: 1.4 }}>
+                          <span style={{ color: '#64748b', fontWeight: 600 }}>Se vota: </span>{artic}
+                        </div>
+                      ) : (titProy && titProy.length && v.descripcion && v.descripcion !== headline && (
                         <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>{v.descripcion}</div>
-                      )}
+                      ))}
                       <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         {bol && <span style={{ fontWeight: 700, color: '#0f766e' }}>Boletín {bol}</span>}
-                        {bol && titulos[bol] === null && <span>buscando título…</span>}
-                        {v.tipo && <span>{v.tipo}</span>}
+                        {bol && titulos[bol] === null && <span>buscando detalle…</span>}
                         {v.quorum && <span>Quórum: {v.quorum}</span>}
                       </div>
                     </div>
@@ -276,6 +322,17 @@ export default function VotacionesDia() {
 function DesgloseVotos({ votos }) {
   const [orden, setOrden] = useState('partido')
   const [filtroOpcion, setFiltroOpcion] = useState('Todos')
+  const [fPartido, setFPartido] = useState('Todos')
+  const [fRegion, setFRegion] = useState('Todos')
+  const [fDistrito, setFDistrito] = useState('Todos')
+  const [fSexo, setFSexo] = useState('Todos')
+  const [fBloque, setFBloque] = useState('Todos')
+
+  const partidos = [...new Set(votos.map(v => v.partido).filter(Boolean))].sort()
+  const regiones = [...new Set(votos.map(v => v.region).filter(Boolean))].sort()
+  const distritos = [...new Set(votos.map(v => v.distrito).filter(d => d !== '' && d != null))].sort((a, b) => a - b)
+  const hayBloque = votos.some(v => v.bloque)
+  const haySexo = votos.some(v => v.sexo)
 
   const resumenPartido = (() => {
     const map = {}
@@ -298,7 +355,23 @@ function DesgloseVotos({ votos }) {
     }
     return (a.partido || 'ZZ').localeCompare(b.partido || 'ZZ') || a.apellido.localeCompare(b.apellido)
   })
-  const filtrados = ordenados.filter(v => filtroOpcion === 'Todos' || v.opcion === filtroOpcion)
+  const filtrados = ordenados.filter(v =>
+    (filtroOpcion === 'Todos' || v.opcion === filtroOpcion) &&
+    (fPartido === 'Todos' || v.partido === fPartido) &&
+    (fRegion === 'Todos' || v.region === fRegion) &&
+    (fDistrito === 'Todos' || String(v.distrito) === fDistrito) &&
+    (fSexo === 'Todos' || v.sexo === fSexo) &&
+    (fBloque === 'Todos' || v.bloque === fBloque)
+  )
+
+  // Conteo por opción del subconjunto filtrado
+  const cuenta = { Afirmativo: 0, 'En Contra': 0, Abstencion: 0, otros: 0 }
+  filtrados.forEach(v => { cuenta[v.opcion] !== undefined ? cuenta[v.opcion]++ : cuenta.otros++ })
+  const hayFiltro = [filtroOpcion, fPartido, fRegion, fDistrito, fSexo, fBloque].some(x => x !== 'Todos')
+
+  function limpiar() {
+    setFiltroOpcion('Todos'); setFPartido('Todos'); setFRegion('Todos'); setFDistrito('Todos'); setFSexo('Todos'); setFBloque('Todos')
+  }
 
   return (
     <div>
@@ -326,23 +399,61 @@ function DesgloseVotos({ votos }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        <select value={filtroOpcion} onChange={e => setFiltroOpcion(e.target.value)} style={S.select}>
-          <option value="Todos">Todos los votos</option>
-          <option value="Afirmativo">A favor</option>
-          <option value="En Contra">En contra</option>
-          <option value="Abstencion">Abstención</option>
-          <option value="No Vota">No vota</option>
-        </select>
-        <select value={orden} onChange={e => setOrden(e.target.value)} style={S.select}>
-          <option value="partido">Agrupar por partido</option>
-          <option value="apellido">Orden por apellido</option>
-          <option value="opcion">Ordenar por voto</option>
-        </select>
+      {/* FILTROS */}
+      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+          <select value={fPartido} onChange={e => setFPartido(e.target.value)} style={S.select}>
+            <option value="Todos">Todos los partidos</option>
+            {partidos.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          {hayBloque && (
+            <select value={fBloque} onChange={e => setFBloque(e.target.value)} style={S.select}>
+              <option value="Todos">Oficialismo y oposición</option>
+              <option value="Oficialismo">Solo Oficialismo</option>
+              <option value="Oposición">Solo Oposición</option>
+            </select>
+          )}
+          <select value={fRegion} onChange={e => setFRegion(e.target.value)} style={S.select}>
+            <option value="Todos">Todas las regiones</option>
+            {regiones.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <select value={fDistrito} onChange={e => setFDistrito(e.target.value)} style={S.select}>
+            <option value="Todos">Todos los distritos</option>
+            {distritos.map(d => <option key={d} value={String(d)}>Distrito {d}</option>)}
+          </select>
+          {haySexo && (
+            <select value={fSexo} onChange={e => setFSexo(e.target.value)} style={S.select}>
+              <option value="Todos">Hombres y mujeres</option>
+              <option value="F">Solo mujeres</option>
+              <option value="M">Solo hombres</option>
+            </select>
+          )}
+          <select value={filtroOpcion} onChange={e => setFiltroOpcion(e.target.value)} style={S.select}>
+            <option value="Todos">Todos los votos</option>
+            <option value="Afirmativo">A favor</option>
+            <option value="En Contra">En contra</option>
+            <option value="Abstencion">Abstención</option>
+            <option value="No Vota">No vota</option>
+          </select>
+          <select value={orden} onChange={e => setOrden(e.target.value)} style={S.select}>
+            <option value="partido">Agrupar por partido</option>
+            <option value="apellido">Orden por apellido</option>
+            <option value="opcion">Ordenar por voto</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{filtrados.length} de {votos.length}</span>
+          <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✓{cuenta.Afirmativo} a favor</span>
+          <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>✗{cuenta['En Contra']} en contra</span>
+          {cuenta.Abstencion > 0 && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>~{cuenta.Abstencion} abst.</span>}
+          {hayFiltro && <button onClick={limpiar} style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', background: 'white', border: '1px solid #cbd5e1', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', marginLeft: 'auto' }}>Limpiar filtros</button>}
+        </div>
       </div>
 
       {votos.length === 0 ? (
         <div style={{ fontSize: 12, color: '#94a3b8' }}>No hay votos individuales para esta votación.</div>
+      ) : filtrados.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 16 }}>Ningún diputado coincide con esos filtros.</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 5 }}>
           {filtrados.map((v, i) => {
@@ -353,7 +464,7 @@ function DesgloseVotos({ votos }) {
                 <div style={{ width: 9, height: 9, borderRadius: '50%', background: PARTIDO_COLORS[v.partido] || '#94a3b8', flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.diputado}</div>
-                  <div style={{ fontSize: 10, color: '#94a3b8' }}>{v.partido}</div>
+                  <div style={{ fontSize: 10, color: '#94a3b8' }}>{v.partido}{v.distrito ? ' · D' + v.distrito : ''}{v.region ? ' · ' + v.region : ''}</div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>{label}</span>
               </div>
