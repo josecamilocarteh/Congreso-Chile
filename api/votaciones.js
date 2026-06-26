@@ -232,14 +232,31 @@ function parsear(xml, tipo) {
     const totalNo = parseInt(tag(xml, 'TotalNegativos')) || 0
     const totalAbs = parseInt(tag(xml, 'TotalAbstenciones')) || 0
 
-    // Los votos individuales: quitar todas las etiquetas XML y leer texto plano
-    // Formato: "ID Nombre Apellido1 Apellido2 Opcion"
-    const texto = xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-    const votos = []
-    const patron = /(\d{3,4})\s+((?:[A-ZÁÉÍÓÚÑÜ][a-záéíóúñüà]+(?:\s+y)?\s+)+)(Afirmativo|En Contra|Abstencion|No Vota|Dispensado|Pareo)/g
-    let m
-    while ((m = patron.exec(texto)) !== null) {
-      votos.push({ diputado: m[2].trim(), opcion: m[3] })
+    // 1) Intentar leer los votos desde la estructura XML real <Votos><Voto><Diputado/><Opcion/></Voto>
+    let votos = []
+    const votosXml = (xml.match(/<Votos>([\s\S]*?)<\/Votos>/i) || [])[1] || ''
+    if (votosXml) {
+      votos = tagAll(votosXml, 'Voto').map(function (vt) {
+        const dip = tag(vt, 'Diputado')
+        let nombre = [
+          tag(dip, 'Nombre'),
+          tag(dip, 'Apellido_Paterno') || tag(dip, 'ApellidoPaterno'),
+          tag(dip, 'Apellido_Materno') || tag(dip, 'ApellidoMaterno')
+        ].map(limpiar).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+        if (!nombre) nombre = limpiar(dip).replace(/^\d+\s*/, '').trim()  // quitar Id inicial si vino plano
+        const opcion = normOpcion(tag(vt, 'Opcion') || tag(vt, 'OpcionVoto') || tag(vt, 'Seleccion'))
+        return { diputado: nombre, opcion: opcion }
+      }).filter(function (x) { return x.diputado && x.opcion })
+    }
+
+    // 2) Fallback: texto plano "ID Nombre Apellido1 Apellido2 Opcion" (formato antiguo)
+    if (votos.length === 0) {
+      const texto = xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      const patron = /(\d{3,4})\s+((?:[A-ZÁÉÍÓÚÑÜ][a-záéíóúñüà]+(?:\s+y)?\s+)+)(Afirmativo|En Contra|Abstencion|No Vota|Dispensado|Pareo)/g
+      let m
+      while ((m = patron.exec(texto)) !== null) {
+        votos.push({ diputado: m[2].trim(), opcion: m[3] })
+      }
     }
 
     return { tipo: 'detalle', descripcion: descripcion, fecha: fecha, votos: votos, resumen: { si: totalSi, no: totalNo, abs: totalAbs } }
