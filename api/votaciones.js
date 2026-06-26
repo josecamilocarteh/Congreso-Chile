@@ -43,6 +43,18 @@ export default async function handler(req, res) {
       return res.status(200).json(parsearDetalleAnio(xmlD, idv))
     }
 
+    // Detalle COMPLETO desde la página web de la Cámara (votacion_detalle.aspx)
+    // Trae materia, tipo y los votos diputado por diputado de TODOS los tipos
+    // (proyectos de ley, acuerdos, resoluciones y votaciones de la cuenta/sala)
+    if (req.query.camaraDetalle) {
+      const idc = String(req.query.camaraDetalle).replace(/[^0-9]/g, '')
+      const urlC = 'https://www.camara.cl/legislacion/sala_sesiones/votacion_detalle.aspx?prmIdVotacion=' + idc
+      const r = await fetch(urlC, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+      if (!r.ok) return res.status(200).json({ error: 'Página Cámara código ' + r.status })
+      const htmlC = await r.text()
+      return res.status(200).json(parsearCamaraDetalle(htmlC))
+    }
+
     // Votaciones del Senado por boletín
     if (req.query.senado) {
       const num = String(req.query.senado).split('-')[0]
@@ -152,6 +164,52 @@ function parsearDetalleAnio(xml, id) {
     return { diputado: nombre, opcion: normOpcion(tag(vt, 'OpcionVoto')) }
   }).filter(function (x) { return x.diputado })
   return { tipo: 'detalleAnio', encontrado: true, votos: votos }
+}
+
+function parsearCamaraDetalle(html) {
+  // --- Materia y Tipo desde el texto plano ---
+  const txt = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&aacute;/gi, 'á')
+    .replace(/&eacute;/gi, 'é').replace(/&iacute;/gi, 'í').replace(/&oacute;/gi, 'ó')
+    .replace(/&uacute;/gi, 'ú').replace(/&ntilde;/gi, 'ñ').replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ').trim()
+  function entre(a, b, max) {
+    const i = txt.indexOf(a); if (i < 0) return ''
+    const desde = i + a.length
+    const j = b ? txt.indexOf(b, desde) : -1
+    return txt.slice(desde, (j > 0 && j - desde < (max || 1200)) ? j : desde + (max || 1200)).trim()
+  }
+  const materia = entre('Materia:', 'Sesión:') || entre('Materia:', 'Tipo de Votación')
+  let tipo = entre('Tipo de Votación', 'Resultado', 60)
+  if (!tipo) tipo = entre('Tipo:', 'Resultado', 60)
+
+  // --- Votos: ubicar secciones y asignar cada diputado a su opción ---
+  const marcas = []
+  const secs = [
+    { re: />\s*A Favor\s*</gi, op: 'Afirmativo' },
+    { re: />\s*En Contra\s*</gi, op: 'En Contra' },
+    { re: />\s*Abstenci[oó&][^<]*</gi, op: 'Abstencion' },
+    { re: />\s*Dispensad[oa]s?\s*</gi, op: 'Dispensado' }
+  ]
+  secs.forEach(function (s) { let m; while ((m = s.re.exec(html)) !== null) marcas.push({ pos: m.index, op: s.op }) })
+  marcas.sort(function (a, b) { return a.pos - b.pos })
+
+  const votos = []
+  const linkRe = /detalle\/mociones\.aspx\?prmID=\d+[^>]*>([^<]+)<\/a>/gi
+  let lm
+  while ((lm = linkRe.exec(html)) !== null) {
+    const pos = lm.index
+    let op = ''
+    for (let k = 0; k < marcas.length; k++) { if (marcas[k].pos < pos) op = marcas[k].op; else break }
+    if (!op) continue
+    let nombre = lm[1].replace(/&[^;]+;/g, ' ').replace(/\s+/g, ' ').trim()
+    if (nombre.indexOf(',') >= 0) {
+      const p = nombre.split(',')
+      nombre = (p[1] + ' ' + p[0]).replace(/\s+/g, ' ').trim()  // "Apellidos, Nombre" → "Nombre Apellidos"
+    }
+    if (nombre) votos.push({ diputado: nombre, opcion: op })
+  }
+
+  return { tipo: 'camaraDetalle', materia: materia, tipoVotacion: tipo, votos: votos }
 }
 
 function parsearSenado(xml) {
