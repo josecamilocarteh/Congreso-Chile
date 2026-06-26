@@ -55,9 +55,9 @@ function fasesDe(texto) {
   if (t.includes('particular')) out.push({ label: 'Votación en particular', color: '#7c3aed' })
   return out
 }
-function categoriaDe(v) {
+function categoriaDe(v, tipoCamara) {
   if (boletinDe(v.descripcion)) return 'ley'
-  const txt = ((v.descripcion || '') + ' ' + (v.tipo || '')).toLowerCase()
+  const txt = ((tipoCamara || '') + ' ' + (v.descripcion || '') + ' ' + (v.tipo || '')).toLowerCase()
   if (txt.includes('acuerdo')) return 'acuerdo'
   if (txt.includes('resoluci')) return 'resolucion'
   return 'otra'
@@ -89,6 +89,8 @@ export default function VotacionesDia() {
   const [loadingDet, setLoadingDet] = useState(null)
   const [titulos, setTitulos] = useState({})          // cache por boletín → título
   const [articulos, setArticulos] = useState({})      // cache por votaciónId → descripción (Articulo) del proyecto
+  const [materias, setMaterias] = useState({})        // cache por votaciónId → materia (página Cámara) para votaciones sin boletín
+  const [tiposCamara, setTiposCamara] = useState({})  // cache por votaciónId → tipo de votación (Acuerdo/Resolución/etc.)
 
   useEffect(() => {
     let activo = true
@@ -148,6 +150,27 @@ export default function VotacionesDia() {
     return () => { activo = false }
   }, [fecha, todas])  // eslint-disable-line
 
+  // Para votaciones SIN boletín (acuerdos, resoluciones, cuenta): traer la materia desde la página de la Cámara
+  useEffect(() => {
+    let activo = true
+    const sinBoletin = delDia.filter(v => !boletinDe(v.descripcion) && materias[String(v.id)] === undefined)
+    if (sinBoletin.length === 0) return
+    setMaterias(prev => { const n = { ...prev }; sinBoletin.forEach(v => { n[String(v.id)] = null }); return n })
+    sinBoletin.forEach(async (v) => {
+      try {
+        const res = await fetch(`/api/votaciones?camaraDetalle=${v.id}`)
+        const data = await res.json()
+        if (activo) {
+          setMaterias(prev => ({ ...prev, [String(v.id)]: (data && data.materia) ? data.materia : '' }))
+          if (data && data.tipoVotacion) setTiposCamara(prev => ({ ...prev, [String(v.id)]: data.tipoVotacion }))
+        }
+      } catch {
+        if (activo) setMaterias(prev => ({ ...prev, [String(v.id)]: '' }))
+      }
+    })
+    return () => { activo = false }
+  }, [fecha, todas])  // eslint-disable-line
+
   function enriquecer(votos) {
     return (votos || []).map(voto => {
       const dip = buscarDiputado(voto.diputado)
@@ -169,17 +192,19 @@ export default function VotacionesDia() {
     if (detalles[v.id]) return
     setLoadingDet(v.id)
     try {
-      // 1) Intentar la API de detalle (votaciones de ley)
       let votos = []
+      // 1) Página de la Cámara (votacion_detalle.aspx): sirve para TODOS los tipos
       try {
-        const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
+        const res = await fetch(`/api/votaciones?camaraDetalle=${v.id}`)
         const data = await res.json()
-        if (!data.error) votos = data.votos || []
-      } catch { /* sigue al fallback */ }
-      // 2) Si no hay votos (ej. acuerdos/resoluciones), usar la API nueva del año
+        if (!data.error) {
+          votos = data.votos || []
+          if (data.materia) setMaterias(prev => ({ ...prev, [String(v.id)]: data.materia }))
+        }
+      } catch { /* sigue al respaldo */ }
+      // 2) Respaldo: API antigua de detalle (votaciones de ley)
       if (votos.length === 0) {
-        const año = (v.fecha || '2026').slice(0, 4)
-        const res2 = await fetch(`/api/votaciones?detalleAnio=${v.id}&anio=${año}`)
+        const res2 = await fetch(`/api/votaciones?votacionId=${v.id}`)
         const data2 = await res2.json()
         if (!data2.error) votos = data2.votos || []
       }
@@ -197,8 +222,11 @@ export default function VotacionesDia() {
     const bol = boletinDe(v.descripcion)
     const titProy = bol ? titulos[bol] : undefined
     const artic = articulos[String(v.id)]
+    const materia = materias[String(v.id)]                  // materia (página Cámara) para votaciones sin boletín
     const fases = fasesDe(artic || v.descripcion || v.tipo)
-    const headline = (titProy && titProy.length) ? titProy : (v.descripcion || v.tipo || '(Sin descripción registrada)')
+    const headline = (titProy && titProy.length) ? titProy
+      : (materia && materia.length) ? materia
+      : (v.descripcion || v.tipo || '(Sin descripción registrada)')
     return (
       <div key={v.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
         <div onClick={() => toggleDetalle(v)} style={{ padding: '12px 14px', cursor: 'pointer', background: abierto ? '#f8fafc' : 'white' }}>
@@ -228,6 +256,7 @@ export default function VotacionesDia() {
               <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {bol && <span style={{ fontWeight: 700, color: '#0f766e' }}>Boletín {bol}</span>}
                 {bol && titulos[bol] === null && <span>buscando detalle…</span>}
+                {!bol && materia === null && <span>buscando materia…</span>}
                 {v.quorum && <span>Quórum: {v.quorum}</span>}
               </div>
             </div>
@@ -336,7 +365,7 @@ export default function VotacionesDia() {
           )}
 
           {SECCIONES.map(sec => {
-            const items = delDia.filter(v => sec.match(categoriaDe(v)))
+            const items = delDia.filter(v => sec.match(categoriaDe(v, tiposCamara[String(v.id)])))
             if (items.length === 0) return null
             return (
               <div key={sec.key} style={{ marginBottom: 18 }}>
