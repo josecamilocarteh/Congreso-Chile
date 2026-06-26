@@ -48,12 +48,25 @@ function boletinDe(texto) {
   const m = (texto || '').match(/(\d{4,6}-\d{2})/)
   return m ? m[1] : null
 }
-function faseDe(texto) {
+function fasesDe(texto) {
   const t = (texto || '').toLowerCase()
-  if (t.includes('particular')) return { label: 'En particular', color: '#7c3aed' }
-  if (t.includes('general')) return { label: 'En general', color: '#0e7490' }
-  return null
+  const out = []
+  if (t.includes('general')) out.push({ label: 'Votación en general', color: '#0e7490' })
+  if (t.includes('particular')) out.push({ label: 'Votación en particular', color: '#7c3aed' })
+  return out
 }
+function categoriaDe(v) {
+  if (boletinDe(v.descripcion)) return 'ley'
+  const txt = ((v.descripcion || '') + ' ' + (v.tipo || '')).toLowerCase()
+  if (txt.includes('acuerdo')) return 'acuerdo'
+  if (txt.includes('resoluci')) return 'resolucion'
+  return 'otra'
+}
+const SECCIONES = [
+  { key: 'ley', label: 'Proyectos de ley', color: '#0f766e', match: c => c === 'ley' },
+  { key: 'ar', label: 'Proyectos de acuerdo y de resolución', color: '#b45309', match: c => c === 'acuerdo' || c === 'resolucion' },
+  { key: 'otra', label: 'Otras votaciones de la sesión (cuenta y sala)', color: '#475569', match: c => c === 'otra' }
+]
 // Nombres femeninos que NO terminan en 'a' (para no fallar con Consuelo, Carmen, Karol, etc.)
 const FEM_EXTRA = new Set(['carmen', 'beatriz', 'isabel', 'consuelo', 'maite', 'raquel', 'marisol', 'nancy', 'karen', 'nathalie', 'mercedes', 'pilar', 'ines', 'soledad', 'ruth', 'sol', 'luz', 'flor', 'karol', 'belen', 'noemi', 'jael', 'damaris', 'ester', 'esther', 'lourdes', 'dolores', 'nieves', 'cruz', 'paz', 'leonor', 'marlene'])
 // Nombres masculinos que terminan en 'a' (excepciones a la regla)
@@ -177,6 +190,83 @@ export default function VotacionesDia() {
     setLoadingDet(null)
   }
 
+  function renderFila(v, idx) {
+    const total = v.totalSi + v.totalNo + v.totalAbs
+    const abierto = expandId === v.id
+    const det = detalles[v.id]
+    const bol = boletinDe(v.descripcion)
+    const titProy = bol ? titulos[bol] : undefined
+    const artic = articulos[String(v.id)]
+    const fases = fasesDe(artic || v.descripcion || v.tipo)
+    const headline = (titProy && titProy.length) ? titProy : (v.descripcion || v.tipo || '(Sin descripción registrada)')
+    return (
+      <div key={v.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
+        <div onClick={() => toggleDetalle(v)} style={{ padding: '12px 14px', cursor: 'pointer', background: abierto ? '#f8fafc' : 'white' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#0f766e', background: '#ccfbf1', borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2, minWidth: 26, textAlign: 'center' }}>
+              #{v.numero}
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'white', background: colorResultado(v.resultado), borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2 }}>
+              {v.resultado || '—'}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {fases.length > 0 && (
+                <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+                  {fases.map(f => (
+                    <span key={f.label} style={{ fontSize: 10.5, fontWeight: 800, color: 'white', background: f.color, borderRadius: 5, padding: '2px 8px', textTransform: 'uppercase', letterSpacing: 0.4 }}>{f.label}</span>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 600, lineHeight: 1.35 }}>{headline}</div>
+              {artic && artic.length > 0 ? (
+                <div style={{ fontSize: 12, color: '#334155', marginTop: 3, lineHeight: 1.4 }}>
+                  <span style={{ color: '#64748b', fontWeight: 600 }}>Se vota: </span>{artic}
+                </div>
+              ) : (titProy && titProy.length && v.descripcion && v.descripcion !== headline && (
+                <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>{v.descripcion}</div>
+              ))}
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {bol && <span style={{ fontWeight: 700, color: '#0f766e' }}>Boletín {bol}</span>}
+                {bol && titulos[bol] === null && <span>buscando detalle…</span>}
+                {v.quorum && <span>Quórum: {v.quorum}</span>}
+              </div>
+            </div>
+            <span style={{ fontSize: 14, color: '#94a3b8', flexShrink: 0 }}>{abierto ? '▲' : '▼'}</span>
+          </div>
+          {total > 0 && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8 }}>
+              <div style={{ flex: 1, height: 7, borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', display: 'flex' }}>
+                {v.totalSi > 0 && <div style={{ width: `${(v.totalSi / total) * 100}%`, background: '#10b981' }} />}
+                {v.totalAbs > 0 && <div style={{ width: `${(v.totalAbs / total) * 100}%`, background: '#f59e0b' }} />}
+                {v.totalNo > 0 && <div style={{ width: `${(v.totalNo / total) * 100}%`, background: '#ef4444' }} />}
+              </div>
+              <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✓{v.totalSi}</span>
+              <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>✗{v.totalNo}</span>
+              {v.totalAbs > 0 && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>~{v.totalAbs}</span>}
+              {v.totalDisp > 0 && <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>·{v.totalDisp}</span>}
+            </div>
+          )}
+        </div>
+
+        {abierto && (
+          <div style={{ padding: '12px 14px', borderTop: '1px solid #e2e8f0', background: '#fbfcfe' }}>
+            {loadingDet === v.id ? (
+              <div style={{ textAlign: 'center', padding: 20, color: '#64748b', fontSize: 13 }}>⏳ Cargando votos individuales...</div>
+            ) : det?.error ? (
+              <div style={{ fontSize: 12, color: '#dc2626' }}>No se pudieron cargar los votos: {det.error}</div>
+            ) : det?.votos && det.votos.length > 0 ? (
+              <DesgloseVotos votos={det.votos} />
+            ) : (
+              <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 10 }}>
+                Esta votación no tiene el detalle por diputado disponible en la API.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div>
       {/* AGENDA / TABLAS */}
@@ -245,71 +335,18 @@ export default function VotacionesDia() {
             </div>
           )}
 
-          {delDia.map((v, idx) => {
-            const total = v.totalSi + v.totalNo + v.totalAbs
-            const abierto = expandId === v.id
-            const det = detalles[v.id]
-            const bol = boletinDe(v.descripcion)
-            const titProy = bol ? titulos[bol] : undefined
-            const artic = articulos[String(v.id)]                 // descripción detallada (Articulo) por votación
-            const fase = faseDe(artic || v.descripcion || v.tipo)  // general / particular
-            const headline = (titProy && titProy.length) ? titProy : (v.descripcion || v.tipo || '(Sin descripción registrada)')
+          {SECCIONES.map(sec => {
+            const items = delDia.filter(v => sec.match(categoriaDe(v)))
+            if (items.length === 0) return null
             return (
-              <div key={v.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
-                <div onClick={() => toggleDetalle(v)} style={{ padding: '12px 14px', cursor: 'pointer', background: abierto ? '#f8fafc' : 'white' }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#0f766e', background: '#ccfbf1', borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2, minWidth: 26, textAlign: 'center' }}>
-                      #{v.numero}
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'white', background: colorResultado(v.resultado), borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2 }}>
-                      {v.resultado || '—'}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 3 }}>
-                        {fase && <span style={{ fontSize: 10.5, fontWeight: 800, color: 'white', background: fase.color, borderRadius: 5, padding: '1px 7px', textTransform: 'uppercase', letterSpacing: 0.4 }}>{fase.label}</span>}
-                      </div>
-                      <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 600, lineHeight: 1.35 }}>{headline}</div>
-                      {artic && artic.length > 0 ? (
-                        <div style={{ fontSize: 12, color: '#334155', marginTop: 3, lineHeight: 1.4 }}>
-                          <span style={{ color: '#64748b', fontWeight: 600 }}>Se vota: </span>{artic}
-                        </div>
-                      ) : (titProy && titProy.length && v.descripcion && v.descripcion !== headline && (
-                        <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>{v.descripcion}</div>
-                      ))}
-                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        {bol && <span style={{ fontWeight: 700, color: '#0f766e' }}>Boletín {bol}</span>}
-                        {bol && titulos[bol] === null && <span>buscando detalle…</span>}
-                        {v.quorum && <span>Quórum: {v.quorum}</span>}
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 14, color: '#94a3b8', flexShrink: 0 }}>{abierto ? '▲' : '▼'}</span>
-                  </div>
-                  {total > 0 && (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8 }}>
-                      <div style={{ flex: 1, height: 7, borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', display: 'flex' }}>
-                        {v.totalSi > 0 && <div style={{ width: `${(v.totalSi / total) * 100}%`, background: '#10b981' }} />}
-                        {v.totalAbs > 0 && <div style={{ width: `${(v.totalAbs / total) * 100}%`, background: '#f59e0b' }} />}
-                        {v.totalNo > 0 && <div style={{ width: `${(v.totalNo / total) * 100}%`, background: '#ef4444' }} />}
-                      </div>
-                      <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✓{v.totalSi}</span>
-                      <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>✗{v.totalNo}</span>
-                      {v.totalAbs > 0 && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>~{v.totalAbs}</span>}
-                      {v.totalDisp > 0 && <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>·{v.totalDisp}</span>}
-                    </div>
-                  )}
+              <div key={sec.key} style={{ marginBottom: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: sec.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12.5, fontWeight: 800, color: sec.color, textTransform: 'uppercase', letterSpacing: 0.5 }}>{sec.label}</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{items.length}</span>
+                  <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
                 </div>
-
-                {abierto && (
-                  <div style={{ padding: '12px 14px', borderTop: '1px solid #e2e8f0', background: '#fbfcfe' }}>
-                    {loadingDet === v.id ? (
-                      <div style={{ textAlign: 'center', padding: 20, color: '#64748b', fontSize: 13 }}>⏳ Cargando votos individuales...</div>
-                    ) : det?.error ? (
-                      <div style={{ fontSize: 12, color: '#dc2626' }}>No se pudieron cargar los votos: {det.error}</div>
-                    ) : det?.votos ? (
-                      <DesgloseVotos votos={det.votos} />
-                    ) : null}
-                  </div>
-                )}
+                {items.map((v, idx) => renderFila(v, idx))}
               </div>
             )
           })}
