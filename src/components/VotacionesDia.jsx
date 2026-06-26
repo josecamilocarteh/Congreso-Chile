@@ -286,8 +286,14 @@ export default function VotacionesDia() {
             ) : det?.votos && det.votos.length > 0 ? (
               <DesgloseVotos votos={det.votos} />
             ) : (
-              <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 10 }}>
-                Esta votación no tiene el detalle por diputado disponible en la API.
+              <div style={{ textAlign: 'center', padding: '6px 4px' }}>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
+                  El detalle por diputado de este tipo de votación no está en los datos abiertos. Míralo en la página oficial de la Cámara (se abre en tu navegador):
+                </div>
+                <a href={`https://www.camara.cl/legislacion/sala_sesiones/votacion_detalle.aspx?prmIdVotacion=${v.id}`} target="_blank" rel="noreferrer"
+                  style={{ display: 'inline-block', padding: '9px 18px', background: '#0f766e', color: 'white', borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+                  Ver quién votó qué en camara.cl ↗
+                </a>
               </div>
             )}
           </div>
