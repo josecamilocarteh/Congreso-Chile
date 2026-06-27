@@ -150,26 +150,8 @@ export default function VotacionesDia() {
     return () => { activo = false }
   }, [fecha, todas])  // eslint-disable-line
 
-  // Para votaciones SIN boletín (acuerdos, resoluciones, cuenta): traer la materia desde la página de la Cámara
-  useEffect(() => {
-    let activo = true
-    const sinBoletin = delDia.filter(v => !boletinDe(v.descripcion) && materias[String(v.id)] === undefined)
-    if (sinBoletin.length === 0) return
-    setMaterias(prev => { const n = { ...prev }; sinBoletin.forEach(v => { n[String(v.id)] = null }); return n })
-    sinBoletin.forEach(async (v) => {
-      try {
-        const res = await fetch(`/api/votaciones?camaraDetalle=${v.id}`)
-        const data = await res.json()
-        if (activo) {
-          setMaterias(prev => ({ ...prev, [String(v.id)]: (data && data.materia) ? data.materia : '' }))
-          if (data && data.tipoVotacion) setTiposCamara(prev => ({ ...prev, [String(v.id)]: data.tipoVotacion }))
-        }
-      } catch {
-        if (activo) setMaterias(prev => ({ ...prev, [String(v.id)]: '' }))
-      }
-    })
-    return () => { activo = false }
-  }, [fecha, todas])  // eslint-disable-line
+  // Para votaciones SIN boletín (acuerdos, resoluciones, cuenta) el detalle por diputado
+  // solo está en la web de la Cámara (bloqueada al servidor); se muestra con un botón al abrir.
 
   function enriquecer(votos) {
     return (votos || []).map(voto => {
@@ -192,22 +174,12 @@ export default function VotacionesDia() {
     if (detalles[v.id]) return
     setLoadingDet(v.id)
     try {
+      // Detalle por diputado desde datos abiertos (funciona en proyectos de ley).
+      // En acuerdos/resoluciones/cuenta vendrá vacío y se mostrará el botón a camara.cl.
       let votos = []
-      // 1) Página de la Cámara (votacion_detalle.aspx): sirve para TODOS los tipos
-      try {
-        const res = await fetch(`/api/votaciones?camaraDetalle=${v.id}`)
-        const data = await res.json()
-        if (!data.error) {
-          votos = data.votos || []
-          if (data.materia) setMaterias(prev => ({ ...prev, [String(v.id)]: data.materia }))
-        }
-      } catch { /* sigue al respaldo */ }
-      // 2) Respaldo: API antigua de detalle (votaciones de ley)
-      if (votos.length === 0) {
-        const res2 = await fetch(`/api/votaciones?votacionId=${v.id}`)
-        const data2 = await res2.json()
-        if (!data2.error) votos = data2.votos || []
-      }
+      const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
+      const data = await res.json()
+      if (!data.error) votos = data.votos || []
       setDetalles(prev => ({ ...prev, [v.id]: { votos: enriquecer(votos) } }))
     } catch (e) {
       setDetalles(prev => ({ ...prev, [v.id]: { error: e.message } }))
@@ -223,7 +195,7 @@ export default function VotacionesDia() {
     const titProy = bol ? titulos[bol] : undefined
     const artic = articulos[String(v.id)]
     const materia = materias[String(v.id)]                  // materia (página Cámara) para votaciones sin boletín
-    const fases = fasesDe(artic || v.descripcion || v.tipo)
+    const fases = fasesDe([artic, v.tipo, v.descripcion].filter(Boolean).join(' '))
     const headline = (titProy && titProy.length) ? titProy
       : (materia && materia.length) ? materia
       : (v.descripcion || v.tipo || '(Sin descripción registrada)')
