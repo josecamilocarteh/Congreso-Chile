@@ -5,7 +5,7 @@ const TOTAL_DIP = 155
 const TOTAL_SEN = 50
 
 const QUORUMS_DIP = [
-  { id: 'ordinaria', nombre: 'Ley Ordinaria', descripcion: 'Mayoría de los presentes (quórum sala mínimo: 52)', articulo: 'Art. 66 inc. 1° CPR', votos: 27, nota: 'Requiere mayoría simple de los presentes. El quórum mínimo de sala es 1/3 de los diputados en ejercicio (52). Con sala mínima se necesitan al menos 27 votos.', color: '#3b82f6', icono: '📜' },
+  { id: 'ordinaria', nombre: 'Ley Ordinaria', descripcion: 'Mayoría de los miembros presentes', articulo: 'Art. 56 CPR', votos: 78, nota: 'Se aprueba por la mayoría de los diputados presentes. Con los 155 en la Sala se requieren 78 votos (mitad más uno). El quórum mínimo para sesionar es 1/3 de los diputados en ejercicio.', color: '#3b82f6', icono: '📜' },
   { id: 'calificado', nombre: 'Ley de Quórum Calificado', descripcion: 'Mayoría absoluta de los diputados en ejercicio', articulo: 'Art. 66 inc. 2° CPR', votos: 78, nota: 'Requiere 78 votos de 155 (mitad más uno). Aplica a materias como nacionalización, actividades estratégicas del Estado, seguridad nacional, entre otras.', color: '#8b5cf6', icono: '⚖️' },
   { id: 'loc', nombre: 'Ley Orgánica Constitucional', descripcion: 'Mayoría absoluta de los diputados en ejercicio', articulo: 'Art. 66 inc. 3° CPR (mod. Ley 21.773, 2024)', votos: 78, nota: 'Requiere 78 votos de 155. Rebajada de 4/7 a mayoría absoluta por la Reforma Constitucional Ley N°21.773 (2024).', color: '#f59e0b', icono: '🏛' },
   { id: 'interpretativa', nombre: 'Ley Interpretativa de la CPR', descripcion: '3/5 de los diputados en ejercicio', articulo: 'Art. 66 inc. 4° CPR', votos: 93, nota: 'Requiere 93 votos de 155. Leyes que interpretan preceptos de la Constitución.', color: '#06b6d4', icono: '📖' },
@@ -14,7 +14,7 @@ const QUORUMS_DIP = [
 ]
 
 const QUORUMS_SEN = [
-  { id: 'ordinaria', nombre: 'Ley Ordinaria', descripcion: 'Mayoría de los presentes (quórum sala mínimo: 13)', articulo: 'Art. 66 inc. 1° CPR', votos: 7, nota: 'Requiere mayoría simple de los presentes. El quórum mínimo de sala del Senado es 1/4 de los senadores en ejercicio (13). Con sala mínima se necesitan al menos 7 votos.', color: '#3b82f6', icono: '📜' },
+  { id: 'ordinaria', nombre: 'Ley Ordinaria', descripcion: 'Mayoría de los miembros presentes', articulo: 'Art. 56 CPR', votos: 26, nota: 'Se aprueba por la mayoría de los senadores presentes. Con los 50 en la Sala se requieren 26 votos (mitad más uno). El quórum mínimo para sesionar es 1/3 de los senadores en ejercicio.', color: '#3b82f6', icono: '📜' },
   { id: 'calificado', nombre: 'Ley de Quórum Calificado', descripcion: 'Mayoría absoluta de los senadores en ejercicio', articulo: 'Art. 66 inc. 2° CPR', votos: 26, nota: 'Requiere 26 votos de 50 (mitad más uno). Aplica a materias como nacionalización, actividades estratégicas del Estado, seguridad nacional, entre otras.', color: '#8b5cf6', icono: '⚖️' },
   { id: 'loc', nombre: 'Ley Orgánica Constitucional', descripcion: 'Mayoría absoluta de los senadores en ejercicio', articulo: 'Art. 66 inc. 3° CPR (mod. Ley 21.773, 2024)', votos: 26, nota: 'Requiere 26 votos de 50. Rebajada de 4/7 a mayoría absoluta por la Reforma Constitucional Ley N°21.773 (2024).', color: '#f59e0b', icono: '🏛' },
   { id: 'interpretativa', nombre: 'Ley Interpretativa de la CPR', descripcion: '3/5 de los senadores en ejercicio', articulo: 'Art. 66 inc. 4° CPR', votos: 30, nota: 'Requiere 30 votos de 50. Leyes que interpretan preceptos de la Constitución.', color: '#06b6d4', icono: '📖' },
