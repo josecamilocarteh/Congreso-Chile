@@ -93,7 +93,7 @@ export const diputados = [
   // D3 - Antofagasta
   { nombre: 'Sebastián Videla Castillo', partido: 'Liberal', bloque: 'Oposición', region: 'Antofagasta', distrito: 3, votos: 74340, porcentaje: '23,31%' },
   { nombre: 'Jaime Araya Guerrero', partido: 'PPD', bloque: 'Oposición', region: 'Antofagasta', distrito: 3, votos: 13604, porcentaje: '4,27%' },
-  { nombre: 'Marcela Hernando Pérez', partido: 'PPD', bloque: 'Oposición', region: 'Antofagasta', distrito: 3, votos: 11944, porcentaje: '3,74%' },
+  { nombre: 'Marcela Hernando Pérez', partido: 'Liberal', bloque: 'Oposición', region: 'Antofagasta', distrito: 3, votos: 11944, porcentaje: '3,74%' },
   { nombre: 'Fabián Ossandón Briceño', partido: 'PDG', bloque: 'Independiente', region: 'Antofagasta', distrito: 3, votos: 33161, porcentaje: '10,40%' },
   { nombre: 'Carlo Arquero Pizarro', partido: 'Republicano', bloque: 'Oficialismo', region: 'Antofagasta', distrito: 3, votos: 12464, porcentaje: '3,91%' },
   // D4 - Atacama
