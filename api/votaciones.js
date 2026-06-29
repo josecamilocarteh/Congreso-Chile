@@ -73,22 +73,30 @@ export default async function handler(req, res) {
       return res.status(200).json(parsed)
     }
 
-    // DIAGNÓSTICO Senado: muestra qué devuelve la página de votaciones de sala por legislatura
+    // DIAGNÓSTICO Senado: prueba varios identificadores y reporta cuál trae datos
     if (req.query.senadoLegi) {
-      const legi = String(req.query.senadoLegi).replace(/[^0-9]/g, '') || '374'
-      const url1 = 'https://tramitacion.senado.cl/appsenado/index.php?mo=sesionessala&ac=votacionSala&legiini=' + legi
       const cab = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'es-CL,es;q=0.9'
       }
-      try {
-        const r = await fetch(url1, { headers: cab })
-        const html = await r.text()
-        return res.status(200).json({ status: r.status, largo: html.length, muestra: html.slice(0, 4500) })
-      } catch (e) {
-        return res.status(200).json({ error: String(e && e.message || e) })
+      const candidatos = String(req.query.senadoLegi) === 'auto'
+        ? ['462', '463', '461', '460', '374', '375', '373']
+        : [String(req.query.senadoLegi).replace(/[^0-9]/g, '')]
+      const resultados = []
+      let muestra = ''
+      for (const legi of candidatos) {
+        const u = 'https://tramitacion.senado.cl/appsenado/index.php?mo=sesionessala&ac=votacionSala&legiini=' + legi
+        try {
+          const r = await fetch(u, { headers: cab })
+          const html = await r.text()
+          resultados.push({ legi: legi, status: r.status, largo: html.length })
+          if (!muestra && html.length > 200) muestra = html.slice(0, 4000)
+        } catch (e) {
+          resultados.push({ legi: legi, error: String(e && e.message || e) })
+        }
       }
+      return res.status(200).json({ resultados: resultados, muestra: muestra })
     }
 
     // Votaciones del Senado por boletín
