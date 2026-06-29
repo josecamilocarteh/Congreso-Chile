@@ -13,28 +13,26 @@ function norm(s) {
   return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()
 }
-const DIP_TOKENS = diputados.map(d => ({ dip: d, toks: new Set(norm(d.nombre).split(' ')) }))
-function buscarDiputado(nombreApi) {
-  const toks = norm(nombreApi).split(' ').filter(Boolean)
+function surnameDe(nombre) {
+  const p = norm(nombre).split(' ').filter(Boolean)
+  for (let k = p.length - 1; k >= 0; k--) if (!CONECTORES.has(p[k])) return p[k]
+  return ''
+}
+function matchPersona(nombreApi, lista) {
+  const q = new Set(norm(nombreApi).split(' ').filter(Boolean))
   let best = null, bestScore = 0
-  for (const { dip, toks: dt } of DIP_TOKENS) {
-    let s = 0
-    for (const t of toks) if (dt.has(t)) s++
-    if (s > bestScore) { bestScore = s; best = dip }
+  for (const it of lista) {
+    let shared = 0
+    for (const t of it.toks) if (q.has(t)) shared++
+    const score = shared + (it.sur && q.has(it.sur) ? 10 : 0)   // el apellido pesa y desempata
+    if (score > bestScore) { bestScore = score; best = it.person }
   }
   return bestScore >= 2 ? best : null
 }
-const SEN_TOKENS = senadores.map(s => ({ sen: s, toks: new Set(norm(s.nombre).split(' ')) }))
-function buscarSenador(nombreApi) {
-  const toks = norm(nombreApi).split(' ').filter(Boolean)
-  let best = null, bestScore = 0
-  for (const { sen, toks: st } of SEN_TOKENS) {
-    let s = 0
-    for (const t of toks) if (st.has(t)) s++
-    if (s > bestScore) { bestScore = s; best = sen }
-  }
-  return bestScore >= 2 ? best : null
-}
+const DIP_TOKENS = diputados.map(d => ({ person: d, toks: new Set(norm(d.nombre).split(' ')), sur: surnameDe(d.nombre) }))
+function buscarDiputado(nombreApi) { return matchPersona(nombreApi, DIP_TOKENS) }
+const SEN_TOKENS = senadores.map(s => ({ person: s, toks: new Set(norm(s.nombre).split(' ')), sur: surnameDe(s.nombre) }))
+function buscarSenador(nombreApi) { return matchPersona(nombreApi, SEN_TOKENS) }
 function apellidoDe(nombre) {
   const t = norm(nombre).split(' ').filter(Boolean)
   if (t.length < 2) return nombre
