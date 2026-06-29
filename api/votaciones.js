@@ -73,30 +73,20 @@ export default async function handler(req, res) {
       return res.status(200).json(parsed)
     }
 
-    // DIAGNÓSTICO Senado: prueba varios identificadores y reporta cuál trae datos
-    if (req.query.senadoLegi) {
-      const cab = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'es-CL,es;q=0.9'
-      }
-      const candidatos = String(req.query.senadoLegi) === 'auto'
-        ? ['462', '463', '461', '460', '374', '375', '373']
-        : [String(req.query.senadoLegi).replace(/[^0-9]/g, '')]
-      const resultados = []
-      let muestra = ''
-      for (const legi of candidatos) {
-        const u = 'https://tramitacion.senado.cl/appsenado/index.php?mo=sesionessala&ac=votacionSala&legiini=' + legi
-        try {
-          const r = await fetch(u, { headers: cab })
-          const html = await r.text()
-          resultados.push({ legi: legi, status: r.status, largo: html.length })
-          if (!muestra && html.length > 200) muestra = html.slice(0, 4000)
-        } catch (e) {
-          resultados.push({ legi: legi, error: String(e && e.message || e) })
-        }
-      }
-      return res.status(200).json({ resultados: resultados, muestra: muestra })
+    // Votaciones del Senado por día (API moderna web-back.senado.cl)
+    if (req.query.senadoDia) {
+      const fecha = String(req.query.senadoDia)          // YYYY-MM-DD
+      const p = fecha.split('-')
+      if (p.length !== 3) return res.status(200).json({ error: 'fecha inválida', votaciones: [] })
+      const ddmmaa = parseInt(p[2], 10) + '/' + parseInt(p[1], 10) + '/' + p[0]  // D/M/YYYY
+      const legi = req.query.legi ? String(req.query.legi).replace(/[^0-9]/g, '') : '507'
+      const url1 = 'https://web-back.senado.cl/api/votes?id_legislatura=' + legi +
+        '&limit=200&offset=0&palabra_clave=&desde=' + encodeURIComponent(ddmmaa) + '&hasta=' + encodeURIComponent(ddmmaa)
+      const r = await fetch(url1, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } })
+      if (!r.ok) return res.status(200).json({ error: 'API Senado código ' + r.status, votaciones: [] })
+      const j = await r.json()
+      const arr = (j && j.data && j.data.data) || []
+      return res.status(200).json({ votaciones: arr.map(parsearVotacionSenado) })
     }
 
     // Votaciones del Senado por boletín
@@ -254,6 +244,37 @@ function parsearCamaraDetalle(html) {
   }
 
   return { tipo: 'camaraDetalle', materia: materia, tipoVotacion: tipo, votos: votos }
+}
+
+function parsearVotacionSenado(v) {
+  function mapVotos(lista, opcion) {
+    return (Array.isArray(lista) ? lista : []).map(function (s) {
+      const nombre = [s.NOMBRE, s.APELLIDO_PATERNO, s.APELLIDO_MATERNO]
+        .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+      return { diputado: nombre, opcion: opcion }   // 'diputado' por compatibilidad con el desglose
+    })
+  }
+  const vv = v.VOTACIONES || {}
+  const votos = mapVotos(vv.SI, 'Afirmativo')
+    .concat(mapVotos(vv.NO, 'En Contra'))
+    .concat(mapVotos(vv.ABSTENCION, 'Abstencion'))
+  // FECHA_VOTACION viene "DD-MM-YYYY HH:MM:SS" → ISO YYYY-MM-DD
+  let fechaISO = ''
+  const fm = String(v.FECHA_VOTACION || '').match(/(\d{2})-(\d{2})-(\d{4})/)
+  if (fm) fechaISO = fm[3] + '-' + fm[2] + '-' + fm[1]
+  const si = v.SI || 0, no = v.NO || 0, abs = v.ABS || 0
+  return {
+    id: v.ID_VOTACION,
+    descripcion: v.TEMA || '',
+    boletin: v.BOLETIN || '',
+    fecha: fechaISO,
+    hora: v.HORA || '',
+    quorum: v.QUORUM || '',
+    sesion: v.NUMERO_SESION || '',
+    totalSi: si, totalNo: no, totalAbs: abs, totalDisp: v.PAREO || 0,
+    resultado: si > no ? 'Aprobado' : (no > si ? 'Rechazado' : 'Empate'),
+    votos: votos
+  }
 }
 
 function parsearSenado(xml) {
