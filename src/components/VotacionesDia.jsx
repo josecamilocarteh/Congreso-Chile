@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { diputados, PARTIDO_COLORS } from '../data'
+import { diputados, senadores, PARTIDO_COLORS } from '../data'
 
 const OPCION_LABELS = { 'Afirmativo': 'A favor', 'En Contra': 'En contra', 'Abstencion': 'Abstención', 'No Vota': 'No vota', 'Dispensado': 'Dispensado', 'Pareo': 'Pareado' }
 const OPCION_COLORS = { 'Afirmativo': '#10b981', 'En Contra': '#ef4444', 'Abstencion': '#f59e0b', 'No Vota': '#94a3b8', 'Dispensado': '#cbd5e1', 'Pareo': '#cbd5e1' }
@@ -21,6 +21,17 @@ function buscarDiputado(nombreApi) {
     let s = 0
     for (const t of toks) if (dt.has(t)) s++
     if (s > bestScore) { bestScore = s; best = dip }
+  }
+  return bestScore >= 2 ? best : null
+}
+const SEN_TOKENS = senadores.map(s => ({ sen: s, toks: new Set(norm(s.nombre).split(' ')) }))
+function buscarSenador(nombreApi) {
+  const toks = norm(nombreApi).split(' ').filter(Boolean)
+  let best = null, bestScore = 0
+  for (const { sen, toks: st } of SEN_TOKENS) {
+    let s = 0
+    for (const t of toks) if (st.has(t)) s++
+    if (s > bestScore) { bestScore = s; best = sen }
   }
   return bestScore >= 2 ? best : null
 }
@@ -56,7 +67,7 @@ function fasesDe(texto) {
   return out
 }
 function categoriaDe(v, tipoCamara) {
-  if (boletinDe(v.descripcion)) return 'ley'
+  if (v.boletin || boletinDe(v.descripcion)) return 'ley'
   const txt = ((tipoCamara || '') + ' ' + (v.descripcion || '') + ' ' + (v.tipo || '')).toLowerCase()
   if (txt.includes('acuerdo')) return 'acuerdo'
   if (txt.includes('resoluci')) return 'resolucion'
@@ -91,6 +102,9 @@ export default function VotacionesDia() {
   const [articulos, setArticulos] = useState({})      // cache por votaciónId → descripción (Articulo) del proyecto
   const [materias, setMaterias] = useState({})        // cache por votaciónId → materia (página Cámara) para votaciones sin boletín
   const [tiposCamara, setTiposCamara] = useState({})  // cache por votaciónId → tipo de votación (Acuerdo/Resolución/etc.)
+  const [camara, setCamara] = useState('dip')         // 'dip' = Cámara · 'sen' = Senado
+  const [senDelDia, setSenDelDia] = useState([])       // votaciones del Senado del día
+  const [senLoading, setSenLoading] = useState(false)
 
   useEffect(() => {
     let activo = true
@@ -111,14 +125,35 @@ export default function VotacionesDia() {
     return () => { activo = false }
   }, [])
 
+  // Votaciones del Senado para la fecha elegida (API moderna)
+  useEffect(() => {
+    if (camara !== 'sen' || !fecha) return
+    let activo = true
+    setSenLoading(true)
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/votaciones?senadoDia=${fecha}`)
+        const data = await res.json()
+        if (activo) setSenDelDia(data.votaciones || [])
+      } catch { if (activo) setSenDelDia([]) }
+      if (activo) setSenLoading(false)
+    })()
+    return () => { activo = false }
+  }, [camara, fecha])
+
   const fechasConVotaciones = [...new Set(todas.map(v => v.fecha))].sort().reverse()
-  const delDia = todas
-    .filter(v => v.fecha === fecha)
-    .sort((a, b) => (a.fechaHora || '').localeCompare(b.fechaHora || '') || (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
-    .map((v, i) => ({ ...v, numero: i + 1 }))
+  const delDia = camara === 'sen'
+    ? [...senDelDia]
+        .sort((a, b) => (a.hora || '').localeCompare(b.hora || '') || (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
+        .map((v, i) => ({ ...v, numero: i + 1 }))
+    : todas
+        .filter(v => v.fecha === fecha)
+        .sort((a, b) => (a.fechaHora || '').localeCompare(b.fechaHora || '') || (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
+        .map((v, i) => ({ ...v, numero: i + 1 }))
 
   // Para cada boletín del día: buscar el título del proyecto y el detalle por votación (general/particular/artículo)
   useEffect(() => {
+    if (camara !== 'dip') return
     let activo = true
     const boletines = [...new Set(delDia.map(v => boletinDe(v.descripcion)).filter(Boolean))]
       .filter(b => titulos[b] === undefined)
@@ -153,8 +188,20 @@ export default function VotacionesDia() {
   // Para votaciones SIN boletín (acuerdos, resoluciones, cuenta) el detalle por diputado
   // solo está en la web de la Cámara (bloqueada al servidor); se muestra con un botón al abrir.
 
-  function enriquecer(votos) {
+  function enriquecer(votos, esSenado) {
     return (votos || []).map(voto => {
+      if (esSenado) {
+        const sen = buscarSenador(voto.diputado)
+        return {
+          ...voto,
+          partido: sen?.partido || 'Sin partido',
+          apellido: apellidoDe(sen?.nombre || voto.diputado),
+          region: sen?.region || '',
+          distrito: '',
+          bloque: sen?.bloque || '',
+          sexo: sen ? inferSexo(sen.nombre) : inferSexo(voto.diputado)
+        }
+      }
       const dip = buscarDiputado(voto.diputado)
       return {
         ...voto,
@@ -172,6 +219,11 @@ export default function VotacionesDia() {
     if (expandId === v.id) { setExpandId(null); return }
     setExpandId(v.id)
     if (detalles[v.id]) return
+    // Senado: los votos ya vienen incluidos en la votación del día
+    if (camara === 'sen') {
+      setDetalles(prev => ({ ...prev, [v.id]: { votos: enriquecer(v.votos || [], true) } }))
+      return
+    }
     setLoadingDet(v.id)
     try {
       // Detalle por diputado desde datos abiertos (funciona en proyectos de ley).
@@ -191,7 +243,7 @@ export default function VotacionesDia() {
     const total = v.totalSi + v.totalNo + v.totalAbs
     const abierto = expandId === v.id
     const det = detalles[v.id]
-    const bol = boletinDe(v.descripcion)
+    const bol = v.boletin || boletinDe(v.descripcion)
     const titProy = bol ? titulos[bol] : undefined
     const artic = articulos[String(v.id)]
     const materia = materias[String(v.id)]                  // materia (página Cámara) para votaciones sin boletín
@@ -256,7 +308,11 @@ export default function VotacionesDia() {
             ) : det?.error ? (
               <div style={{ fontSize: 12, color: '#dc2626' }}>No se pudieron cargar los votos: {det.error}</div>
             ) : det?.votos && det.votos.length > 0 ? (
-              <DesgloseVotos votos={det.votos} />
+              <DesgloseVotos votos={det.votos} esSenado={camara === 'sen'} />
+            ) : camara === 'sen' ? (
+              <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 10 }}>
+                No hay votos individuales registrados para esta votación.
+              </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '6px 4px' }}>
                 <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
@@ -290,7 +346,17 @@ export default function VotacionesDia() {
       {/* VOTACIONES POR DÍA */}
       <div style={S.card}>
         <div style={S.title}>🗳 Votaciones por día</div>
-        <div style={S.sub}>Lo que ya se votó. Elige cualquier fecha de 2026 · API oficial opendata.camara.cl</div>
+        <div style={S.sub}>Lo que ya se votó. Elige cualquier fecha de 2026 · {camara === 'sen' ? 'API oficial senado.cl' : 'API oficial opendata.camara.cl'}</div>
+
+        <div style={{ display: 'inline-flex', gap: 4, padding: 4, background: '#f1f5f9', borderRadius: 10, marginBottom: 12 }}>
+          {[['dip', '🏛 Cámara de Diputados'], ['sen', '⚖️ Senado']].map(([k, lbl]) => (
+            <button key={k} onClick={() => { setCamara(k); setExpandId(null) }}
+              style={{ padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                background: camara === k ? '#0f766e' : 'transparent', color: camara === k ? 'white' : '#475569' }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 12 }}>
           <div>
@@ -300,7 +366,7 @@ export default function VotacionesDia() {
           </div>
         </div>
 
-        {!loading && fechasConVotaciones.length > 0 && (
+        {!loading && camara === 'dip' && fechasConVotaciones.length > 0 && (
           <div style={{ marginBottom: 4 }}>
             <div style={{ ...S.label, marginBottom: 6 }}>Días con votaciones registradas</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -313,6 +379,11 @@ export default function VotacionesDia() {
             </div>
           </div>
         )}
+        {camara === 'sen' && (
+          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
+            El Senado se consulta por fecha. Elige un día arriba; si no hubo votaciones, prueba otra fecha (las sesiones suelen ser martes, miércoles y jueves).
+          </div>
+        )}
 
         {error && <div style={S.error}>⚠️ {error}</div>}
       </div>
@@ -323,22 +394,30 @@ export default function VotacionesDia() {
         </div>
       )}
 
-      {!loading && !error && todas.length === 0 && (
+      {!loading && !error && camara === 'dip' && todas.length === 0 && (
         <div style={{ ...S.card, textAlign: 'center', padding: 40, color: '#64748b' }}>
           La API no devolvió votaciones para 2026 todavía. Puede que aún no estén cargadas en opendata.camara.cl.
         </div>
       )}
 
-      {!loading && todas.length > 0 && (
+      {camara === 'sen' && senLoading && (
+        <div style={{ ...S.card, textAlign: 'center', padding: 40, color: '#64748b' }}>
+          ⏳ Cargando votaciones del Senado...
+        </div>
+      )}
+
+      {!loading && (camara === 'sen' ? !senLoading : todas.length > 0) && (
         <div style={S.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14, flexWrap: 'wrap', gap: 6 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', textTransform: 'capitalize' }}>{formatFecha(fecha)}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', textTransform: 'capitalize' }}>{formatFecha(fecha)}{camara === 'sen' ? ' · Senado' : ''}</div>
             <div style={{ fontSize: 12, color: '#94a3b8' }}>{delDia.length} {delDia.length === 1 ? 'votación' : 'votaciones'}</div>
           </div>
 
           {delDia.length === 0 && (
             <div style={{ textAlign: 'center', padding: 30, color: '#94a3b8', fontSize: 13 }}>
-              No hay votaciones registradas ese día. Prueba con uno de los días marcados arriba.
+              {camara === 'sen'
+                ? 'El Senado no registró votaciones de sala ese día. Prueba con otra fecha (martes a jueves suelen tener sesión).'
+                : 'No hay votaciones registradas ese día. Prueba con uno de los días marcados arriba.'}
             </div>
           )}
 
@@ -363,7 +442,7 @@ export default function VotacionesDia() {
   )
 }
 
-function DesgloseVotos({ votos }) {
+function DesgloseVotos({ votos, esSenado }) {
   const [orden, setOrden] = useState('partido')
   const [filtroOpcion, setFiltroOpcion] = useState('Todos')
   const [fPartido, setFPartido] = useState('Todos')
@@ -461,10 +540,12 @@ function DesgloseVotos({ votos }) {
             <option value="Todos">Todas las regiones</option>
             {regiones.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
-          <select value={fDistrito} onChange={e => setFDistrito(e.target.value)} style={S.select}>
-            <option value="Todos">Todos los distritos</option>
-            {distritos.map(d => <option key={d} value={String(d)}>Distrito {d}</option>)}
-          </select>
+          {distritos.length > 0 && (
+            <select value={fDistrito} onChange={e => setFDistrito(e.target.value)} style={S.select}>
+              <option value="Todos">Todos los distritos</option>
+              {distritos.map(d => <option key={d} value={String(d)}>Distrito {d}</option>)}
+            </select>
+          )}
           {haySexo && (
             <select value={fSexo} onChange={e => setFSexo(e.target.value)} style={S.select}>
               <option value="Todos">Hombres y mujeres</option>
