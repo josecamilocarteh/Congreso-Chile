@@ -40,7 +40,7 @@ export const senadores = [
   { nombre: 'Diego Ibáñez', partido: 'FA', bloque: 'Oposición', region: 'Valparaíso', cargo: 'Senador' },
   { nombre: 'Beatriz Sánchez', partido: 'FA', bloque: 'Oposición', region: 'Maule', cargo: 'Senadora' },
   { nombre: 'Esteban Velásquez', partido: 'FREVS', bloque: 'Oposición', region: 'Antofagasta', cargo: 'Senador' },
-  { nombre: 'Miguel Ángel Calisto', partido: 'FREVS', bloque: 'Oposición', region: 'Aysén', cargo: 'Senador (Ind-FRVS)' },
+  { nombre: 'Miguel Ángel Calisto', partido: 'FREVS', bloque: 'Oficialismo', region: 'Aysén', cargo: 'Senador (Ind-FRVS)' },
   { nombre: 'Vlado Mirosevic', partido: 'Liberal', bloque: 'Oposición', region: 'Arica y Parinacota', cargo: 'Senador' },
   { nombre: 'Fabiola Campillai', partido: 'Independiente', bloque: 'Oposición', region: 'Metropolitana', cargo: 'Senadora' },
   { nombre: 'Alejandra Sepúlveda', partido: 'Independiente', bloque: 'Oposición', region: "O'Higgins", cargo: 'Senadora' },
