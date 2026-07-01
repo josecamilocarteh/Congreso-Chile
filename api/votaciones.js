@@ -1,3 +1,5 @@
+import { VOTACIONES_MANUALES } from './votaciones-manuales'
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
 
@@ -86,7 +88,28 @@ export default async function handler(req, res) {
       if (!r.ok) return res.status(200).json({ error: 'API Senado código ' + r.status, votaciones: [] })
       const j = await r.json()
       const arr = (j && j.data && j.data.data) || []
-      return res.status(200).json({ votaciones: arr.map(parsearVotacionSenado) })
+      let votaciones = arr.map(parsearVotacionSenado)
+
+      // Detectar posibles huecos en lo que devolvió el Senado ANTES de mezclar
+      // datos manuales (así podemos avisar cuando un hueco fue completado a mano).
+      const advertencias = detectarAdvertencias(votaciones)
+
+      // Completar con votaciones cargadas a mano cuando el Senado no las publicó
+      const manuales = VOTACIONES_MANUALES.filter(function (m) { return m.fecha === fecha })
+      manuales.forEach(function (m) {
+        const yaExiste = votaciones.some(function (v) {
+          return v.boletin === m.boletin && v.descripcion === m.descripcion
+        })
+        if (!yaExiste) {
+          votaciones.push(Object.assign({}, m))
+          advertencias.push(
+            'Se completó "' + m.descripcion + '" con datos cargados manualmente (fuente: ' +
+            m.fuenteDetalle + '), porque la API del Senado no la publicó.'
+          )
+        }
+      })
+
+      return res.status(200).json({ votaciones: votaciones, advertencias: advertencias })
     }
 
     // Votaciones del Senado por boletín
@@ -122,6 +145,66 @@ export default async function handler(req, res) {
     return res.status(200).json({ error: 'Error al consultar: ' + e.message })
   }
 }
+
+// ---------------------------------------------------------------------------
+// Detección de huecos en las votaciones del Senado de un día
+// ---------------------------------------------------------------------------
+
+function extraerCapitulo(texto) {
+  const m = String(texto || '').match(/cap[ií]tulo\s+(\d+)/i)
+  return m ? parseInt(m[1], 10) : null
+}
+
+function detectarAdvertencias(votaciones) {
+  const advertencias = []
+
+  // 1) Huecos en la numeración "Capítulo N" dentro de un mismo boletín.
+  //    Esto fue justo lo que pasó el 30-jun-2026: capítulos 1, 3 y 4 llegaron,
+  //    pero el 2 nunca se publicó en la API del Senado.
+  const porBoletin = {}
+  votaciones.forEach(function (v) {
+    const cap = extraerCapitulo(v.descripcion)
+    if (cap == null || !v.boletin) return
+    if (!porBoletin[v.boletin]) porBoletin[v.boletin] = []
+    porBoletin[v.boletin].push(cap)
+  })
+  Object.keys(porBoletin).forEach(function (boletin) {
+    const caps = porBoletin[boletin].slice().sort(function (a, b) { return a - b })
+    const min = caps[0]
+    const max = caps[caps.length - 1]
+    const faltantes = []
+    for (let n = min; n <= max; n++) if (caps.indexOf(n) === -1) faltantes.push(n)
+    if (faltantes.length > 0) {
+      advertencias.push(
+        'El boletín ' + boletin + ' tiene registrados los capítulos ' + caps.join(', ') +
+        ', pero falta el Capítulo ' + faltantes.join(', ') +
+        ' en la API del Senado (probablemente aún no lo publicaron).'
+      )
+    }
+  })
+
+  // 2) Respaldo genérico: huecos en el correlativo de ID_VOTACION del día.
+  //    Sirve para detectar votaciones faltantes que NO mencionan "Capítulo N"
+  //    (acuerdos, resoluciones, elecciones internas, etc.)
+  const ids = votaciones
+    .map(function (v) { return parseInt(v.id, 10) })
+    .filter(function (n) { return !isNaN(n) })
+    .sort(function (a, b) { return a - b })
+  for (let i = 1; i < ids.length; i++) {
+    const salto = ids[i] - ids[i - 1]
+    if (salto > 1) {
+      advertencias.push(
+        'Hay un salto en los ID de votación entre ' + ids[i - 1] + ' y ' + ids[i] +
+        ' (' + (salto - 1) + ' número' + (salto - 1 > 1 ? 's' : '') + ' de por medio). ' +
+        'Es posible que el Senado no haya publicado una votación de ese día.'
+      )
+    }
+  }
+
+  return advertencias
+}
+
+// ---------------------------------------------------------------------------
 
 function tag(str, name) {
   const re = new RegExp('<' + name + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + name + '>', 'i')
