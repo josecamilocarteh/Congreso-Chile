@@ -103,6 +103,7 @@ export default function VotacionesDia() {
   const [camara, setCamara] = useState('dip')         // 'dip' = Cámara · 'sen' = Senado
   const [senDelDia, setSenDelDia] = useState([])       // votaciones del Senado del día
   const [senLoading, setSenLoading] = useState(false)
+  const [senAdvertencias, setSenAdvertencias] = useState([])  // avisos de posibles huecos/datos manuales
 
   useEffect(() => {
     let activo = true
@@ -132,8 +133,11 @@ export default function VotacionesDia() {
       try {
         const res = await fetch(`/api/votaciones?senadoDia=${fecha}`)
         const data = await res.json()
-        if (activo) setSenDelDia(data.votaciones || [])
-      } catch { if (activo) setSenDelDia([]) }
+        if (activo) {
+          setSenDelDia(data.votaciones || [])
+          setSenAdvertencias(data.advertencias || [])
+        }
+      } catch { if (activo) { setSenDelDia([]); setSenAdvertencias([]) } }
       if (activo) setSenLoading(false)
     })()
     return () => { activo = false }
@@ -249,6 +253,7 @@ export default function VotacionesDia() {
     const headline = (titProy && titProy.length) ? titProy
       : (materia && materia.length) ? materia
       : (v.descripcion || v.tipo || '(Sin descripción registrada)')
+    const esManual = v.fuente === 'manual'
     return (
       <div key={v.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
         <div onClick={() => toggleDetalle(v)} style={{ padding: '12px 14px', cursor: 'pointer', background: abierto ? '#f8fafc' : 'white' }}>
@@ -259,6 +264,11 @@ export default function VotacionesDia() {
             <span style={{ fontSize: 11, fontWeight: 700, color: 'white', background: colorResultado(v.resultado), borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2 }}>
               {v.resultado || '—'}
             </span>
+            {esManual && (
+              <span title={v.fuenteDetalle || 'Cargado manualmente'} style={{ fontSize: 10, fontWeight: 800, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 6, padding: '2px 7px', flexShrink: 0, marginTop: 2 }}>
+                ⚠ Fuente: prensa
+              </span>
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               {fases.length > 0 && (
                 <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
@@ -308,9 +318,19 @@ export default function VotacionesDia() {
             ) : det?.votos && det.votos.length > 0 ? (
               <DesgloseVotos votos={det.votos} esSenado={camara === 'sen'} />
             ) : camara === 'sen' ? (
-              <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 10 }}>
-                No hay votos individuales registrados para esta votación.
-              </div>
+              esManual ? (
+                <div style={{ fontSize: 12, color: '#475569', textAlign: 'center', padding: 10, lineHeight: 1.5 }}>
+                  La API del Senado no publicó esta votación. Los totales fueron cargados a mano desde{' '}
+                  {v.fuenteUrl ? (
+                    <a href={v.fuenteUrl} target="_blank" rel="noreferrer" style={{ color: '#0f766e', fontWeight: 700 }}>{v.fuenteDetalle}</a>
+                  ) : v.fuenteDetalle}
+                  . No hay desglose por senador disponible para esta fuente.
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 10 }}>
+                  No hay votos individuales registrados para esta votación.
+                </div>
+              )
             ) : (
               <div style={{ textAlign: 'center', padding: '6px 4px' }}>
                 <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
@@ -410,6 +430,17 @@ export default function VotacionesDia() {
             <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', textTransform: 'capitalize' }}>{formatFecha(fecha)}{camara === 'sen' ? ' · Senado' : ''}</div>
             <div style={{ fontSize: 12, color: '#94a3b8' }}>{delDia.length} {delDia.length === 1 ? 'votación' : 'votaciones'}</div>
           </div>
+
+          {camara === 'sen' && senAdvertencias.length > 0 && (
+            <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '10px 14px', marginBottom: 14 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: '#92400e', marginBottom: 4 }}>
+                ⚠️ Posible dato incompleto en la fuente oficial del Senado
+              </div>
+              {senAdvertencias.map((a, i) => (
+                <div key={i} style={{ fontSize: 12, color: '#92400e', lineHeight: 1.5, marginTop: i > 0 ? 4 : 0 }}>{a}</div>
+              ))}
+            </div>
+          )}
 
           {delDia.length === 0 && (
             <div style={{ textAlign: 'center', padding: 30, color: '#94a3b8', fontSize: 13 }}>
