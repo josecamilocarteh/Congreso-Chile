@@ -32,18 +32,31 @@ export default function App() {
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", minHeight: '100vh', background: '#f1f5f9', overflowX: 'hidden' }}>
       <header style={styles.header}>
-        <div style={{
-          maxWidth: 1100, margin: '0 auto', padding: isMobile ? '16px 14px' : '20px',
-          display: 'flex', flexDirection: isMobile ? 'column' : 'row',
-          justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center',
-          gap: isMobile ? 14 : 16,
-        }}>
-          <div>
-            <div style={styles.eyebrow}>República de Chile</div>
-            <h1 style={{ ...styles.title, fontSize: isMobile ? 20 : 24 }}>Congreso Nacional</h1>
-            <div style={styles.subtitle}>Período Legislativo 2026–2030</div>
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '16px 14px' : '20px' }}>
+          {/* Fila superior: título + logo */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={styles.eyebrow}>República de Chile</div>
+              <h1 style={{ ...styles.title, fontSize: isMobile ? 20 : 24 }}>Congreso Nacional</h1>
+              <div style={styles.subtitle}>Período Legislativo 2026–2030</div>
+            </div>
+            {/* LOGO / firma */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: isMobile ? 38 : 44, height: isMobile ? 38 : 44, borderRadius: '50%', flexShrink: 0,
+                background: 'linear-gradient(135deg,#1e40af,#0f766e)', color: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 800, fontSize: isMobile ? 13 : 15, fontFamily: "'Playfair Display', serif",
+                boxShadow: '0 2px 8px rgba(30,64,175,0.25)',
+              }}>JC</div>
+              <div style={{ lineHeight: 1.25 }}>
+                <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: '#0f172a', fontFamily: "'Playfair Display', serif" }}>José Camilo Carte</div>
+                <div style={{ fontSize: isMobile ? 10 : 11, color: '#94a3b8', letterSpacing: 0.3 }}>Asesor Legislativo</div>
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: isMobile ? 6 : 8, flexWrap: 'wrap', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
+          {/* Fila de pestañas */}
+          <div style={{ display: 'flex', gap: isMobile ? 6 : 8, flexWrap: 'wrap', marginTop: isMobile ? 14 : 16 }}>
             {TABS.map(([key, label, color]) => {
               const active = tab === key
               return (
