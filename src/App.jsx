@@ -50,7 +50,7 @@ export default function App() {
                 boxShadow: '0 2px 8px rgba(30,64,175,0.25)',
               }}>JC</div>
               <div style={{ lineHeight: 1.25 }}>
-                <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: '#0f172a', fontFamily: "'Playfair Display', serif" }}>José Camilo Carte</div>
+                <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: '#0f172a', fontFamily: "'Playfair Display', serif" }}>José Camilo Carte Hernández</div>
                 <div style={{ fontSize: isMobile ? 10 : 11, color: '#94a3b8', letterSpacing: 0.3 }}>Asesor Legislativo</div>
               </div>
             </div>
