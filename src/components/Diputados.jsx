@@ -23,14 +23,19 @@ const opList = agruparPorPartido(diputados.filter(d => d.bloque === 'Oposición'
 const ofList = agruparPorPartido(diputados.filter(d => d.bloque === 'Oficialismo'), ORDEN_PARTIDOS_OF)
 const indList = diputados.filter(d => d.bloque === 'Independiente')
 
-// Rows: 24+29+33+34+35 = 155  op:10+12+14+15+14=65  ind:3+3+3+3+3=15  of:11+14+16+16+18=75
-const ROWS = [
-  { r: 80,  total: 24, op: 10, ind: 3 },
-  { r: 110, total: 29, op: 12, ind: 3 },
-  { r: 140, total: 33, op: 14, ind: 3 },
-  { r: 170, total: 34, op: 15, ind: 3 },
-  { r: 200, total: 35, op: 14, ind: 3 },
-]
+// Reparto dinámico según los bloques reales (evita que falten escaños si cambian los números)
+const ROW_TOTALS = [24, 29, 33, 34, 35]  // suma 155
+const RADIOS = [80, 110, 140, 170, 200]
+const TOTAL_ESCANOS = ROW_TOTALS.reduce((a, x) => a + x, 0)
+let _opAsig = 0, _indAsig = 0
+const ROWS = ROW_TOTALS.map((total, idx) => {
+  const last = idx === ROW_TOTALS.length - 1
+  const op = last ? opList.length - _opAsig : Math.round(opList.length * total / TOTAL_ESCANOS)
+  _opAsig += op
+  const ind = last ? indList.length - _indAsig : Math.round(indList.length * total / TOTAL_ESCANOS)
+  _indAsig += ind
+  return { r: RADIOS[idx], total, op, ind }
+})
 
 const cx = 390, cy = 340
 
@@ -103,8 +108,8 @@ export default function Diputados() {
         <div style={styles.cardSubtitle}>Haz clic en un escaño para ver al diputado · Partidos agrupados · Oposición izquierda · Oficialismo derecha</div>
 
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <svg width="780" height="355" viewBox="0 0 780 355" style={{ overflow: 'visible' }}>
+          <div style={{ width: '100%', maxWidth: 780 }}>
+            <svg viewBox="0 0 780 355" style={{ width: '100%', height: 'auto', overflow: 'visible', display: 'block' }}>
               <path d={`M ${cx-225} ${cy} A 225 225 0 0 1 ${cx+225} ${cy}`}
                 fill="none" stroke="#e2e8f0" strokeWidth="2" />
               <line x1={cx} y1={cy-70} x2={cx} y2={cy-220}
