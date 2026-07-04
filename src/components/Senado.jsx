@@ -24,11 +24,20 @@ export default function Senado() {
   const oficialismo = senadores.filter(s => s.bloque === 'Oficialismo')
   const cx = 300, cy = 290
   const circles = []
-  const rows = [
-    { r: 95, totalSeats: 15, opSeats: 8 },
-    { r: 130, totalSeats: 17, opSeats: 8 },
-    { r: 165, totalSeats: 18, opSeats: 9 },
+  const rowsDef = [
+    { r: 95, totalSeats: 15 },
+    { r: 130, totalSeats: 17 },
+    { r: 165, totalSeats: 18 },
   ]
+  const totalSeatsAll = rowsDef.reduce((a, x) => a + x.totalSeats, 0)
+  let opAsignados = 0
+  const rows = rowsDef.map((row, idx) => {
+    const opSeats = idx === rowsDef.length - 1
+      ? oposicion.length - opAsignados
+      : Math.round(oposicion.length * row.totalSeats / totalSeatsAll)
+    opAsignados += opSeats
+    return { ...row, opSeats }
+  })
   let opIdx = 0, ofIdx = 0, globalId = 0
   rows.forEach(({ r, totalSeats, opSeats }) => {
     const ofSeats = totalSeats - opSeats
@@ -63,8 +72,8 @@ export default function Senado() {
         <div style={styles.cardTitle}>Hemiciclo del Senado</div>
         <div style={styles.cardSubtitle}>Haz clic en un escaño para ver al senador</div>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <svg width="600" height="310" viewBox="0 0 600 310" style={{ overflow: 'visible' }}>
+          <div style={{ width: '100%', maxWidth: 600 }}>
+            <svg viewBox="0 0 600 310" style={{ width: '100%', height: 'auto', overflow: 'visible', display: 'block' }}>
               <path d={`M ${cx-195} ${cy} A 195 195 0 0 1 ${cx+195} ${cy}`} fill="none" stroke="#e2e8f0" strokeWidth="2"/>
               <line x1={cx} y1={cy-75} x2={cx} y2={cy-180} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="5,3"/>
               {circles.map(({ x, y, senador, id }) => (
