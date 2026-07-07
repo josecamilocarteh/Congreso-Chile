@@ -243,21 +243,29 @@ export default function VotacionesDia() {
   }
 
   async function descargarPDF(v) {
+    // Si los votos ya están disponibles, generamos el PDF de inmediato, en el mismo
+    // clic, sin ningún "await" antes. Esto evita que Safari bloquee la descarga
+    // por considerar que ya no viene de un gesto directo del usuario.
+    if (camara === 'sen') {
+      generarPDFVotacion(v, enriquecer(v.votos || [], true), camara)
+      return
+    }
+    if (detalles[v.id]?.votos) {
+      generarPDFVotacion(v, detalles[v.id].votos, camara)
+      return
+    }
+    // Todavía no tenemos el detalle (Cámara): lo cargamos primero. El PDF se
+    // genera recién en el próximo clic, para no perder el gesto del usuario.
     setGenerandoPDF(v.id)
     try {
-      let votos = []
-      if (camara === 'sen') {
-        votos = enriquecer(v.votos || [], true)
-      } else if (detalles[v.id]?.votos?.length) {
-        votos = detalles[v.id].votos
-      } else {
-        try {
-          const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
-          const data = await res.json()
-          if (!data.error) votos = enriquecer(data.votos || [])
-        } catch (e) { /* seguimos y generamos el PDF sin desglose individual */ }
-      }
-      generarPDFVotacion(v, votos, camara)
+      const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
+      const data = await res.json()
+      const votos = !data.error ? enriquecer(data.votos || []) : []
+      setDetalles(prev => ({ ...prev, [v.id]: { votos } }))
+      setExpandId(v.id)
+      alert('Ya cargué los datos de esta votación. Toca "PDF" una vez más para descargarlo.')
+    } catch (e) {
+      alert('No se pudieron cargar los votos individuales. Intenta de nuevo.')
     } finally {
       setGenerandoPDF(null)
     }
@@ -674,6 +682,14 @@ function generarPDFVotacion(v, votos, camaraSel) {
     alert('El generador de PDF todavía está cargando. Espera un segundo y vuelve a intentarlo.')
     return
   }
+  try {
+    _construirYDescargarPDF(v, votos, camaraSel)
+  } catch (e) {
+    alert('No se pudo generar el PDF: ' + e.message)
+  }
+}
+
+function _construirYDescargarPDF(v, votos, camaraSel) {
   const { jsPDF } = window.jspdf
   const doc = new jsPDF()
   const total = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbs || 0)
