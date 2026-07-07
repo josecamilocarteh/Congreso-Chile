@@ -104,6 +104,7 @@ export default function VotacionesDia() {
   const [senDelDia, setSenDelDia] = useState([])       // votaciones del Senado del día
   const [senLoading, setSenLoading] = useState(false)
   const [senAdvertencias, setSenAdvertencias] = useState([])  // avisos de posibles huecos/datos manuales
+  const [generandoPDF, setGenerandoPDF] = useState(null)      // id de la votación cuyo PDF se está generando
 
   useEffect(() => {
     let activo = true
@@ -241,6 +242,27 @@ export default function VotacionesDia() {
     setLoadingDet(null)
   }
 
+  async function descargarPDF(v) {
+    setGenerandoPDF(v.id)
+    try {
+      let votos = []
+      if (camara === 'sen') {
+        votos = enriquecer(v.votos || [], true)
+      } else if (detalles[v.id]?.votos?.length) {
+        votos = detalles[v.id].votos
+      } else {
+        try {
+          const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
+          const data = await res.json()
+          if (!data.error) votos = enriquecer(data.votos || [])
+        } catch (e) { /* seguimos y generamos el PDF sin desglose individual */ }
+      }
+      generarPDFVotacion(v, votos, camara)
+    } finally {
+      setGenerandoPDF(null)
+    }
+  }
+
   function renderFila(v, idx) {
     const total = v.totalSi + v.totalNo + v.totalAbs
     const abierto = expandId === v.id
@@ -292,6 +314,19 @@ export default function VotacionesDia() {
                 {v.quorum && <span>Quórum: {v.quorum}</span>}
               </div>
             </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); descargarPDF(v) }}
+              disabled={generandoPDF === v.id}
+              title="Descargar esta votación en PDF"
+              style={{
+                fontSize: 11, fontWeight: 700, color: '#0f766e', background: '#f0fdfa',
+                border: '1px solid #99f6e4', borderRadius: 6, padding: '3px 8px',
+                cursor: generandoPDF === v.id ? 'default' : 'pointer', flexShrink: 0,
+                opacity: generandoPDF === v.id ? 0.6 : 1, whiteSpace: 'nowrap'
+              }}
+            >
+              {generandoPDF === v.id ? '⏳' : '📄'} PDF
+            </button>
             <span style={{ fontSize: 14, color: '#94a3b8', flexShrink: 0 }}>{abierto ? '▲' : '▼'}</span>
           </div>
           {total > 0 && (
@@ -628,6 +663,87 @@ function DesgloseVotos({ votos, esSenado }) {
       )}
     </div>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Generación de PDF por votación (usa jsPDF + jspdf-autotable cargados por
+// CDN en index.html — ver window.jspdf). No depende de ningún build step.
+// ---------------------------------------------------------------------------
+function generarPDFVotacion(v, votos, camaraSel) {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('El generador de PDF todavía está cargando. Espera un segundo y vuelve a intentarlo.')
+    return
+  }
+  const { jsPDF } = window.jspdf
+  const doc = new jsPDF()
+  const total = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbs || 0)
+
+  doc.setFontSize(14)
+  doc.setFont(undefined, 'bold')
+  doc.text('Congreso Nacional de Chile 2026-2030', 14, 18)
+  doc.setFontSize(11)
+  doc.setFont(undefined, 'normal')
+  doc.text(camaraSel === 'sen' ? 'Votación del Senado' : 'Votación de la Cámara de Diputados', 14, 25)
+  doc.setDrawColor(200)
+  doc.line(14, 29, 196, 29)
+
+  let y = 38
+  doc.setFontSize(12)
+  doc.setFont(undefined, 'bold')
+  const headline = v.descripcion || v.tipo || '(Sin descripción registrada)'
+  const headlineLines = doc.splitTextToSize(headline, 182)
+  doc.text(headlineLines, 14, y)
+  y += headlineLines.length * 6 + 4
+
+  doc.setFontSize(10)
+  doc.setFont(undefined, 'normal')
+  if (v.boletin) { doc.text('Boletín: ' + v.boletin, 14, y); y += 6 }
+  if (v.sesion) { doc.text('Sesión: ' + v.sesion, 14, y); y += 6 }
+  if (v.fecha) { doc.text('Fecha: ' + v.fecha, 14, y); y += 6 }
+  if (v.quorum) { doc.text('Quórum: ' + v.quorum, 14, y); y += 6 }
+  doc.text('Resultado: ' + (v.resultado || '—'), 14, y); y += 6
+  doc.text(
+    'Votos - A favor: ' + (v.totalSi || 0) + '   En contra: ' + (v.totalNo || 0) +
+    '   Abstención: ' + (v.totalAbs || 0) + (total ? '   (Total: ' + total + ')' : ''),
+    14, y
+  )
+  y += 10
+
+  if (v.fuente === 'manual') {
+    doc.setTextColor(150, 90, 10)
+    const nota = doc.splitTextToSize(
+      'Esta votación no fue publicada por la API oficial del Senado; los totales fueron ' +
+      'cargados a mano (fuente: ' + (v.fuenteDetalle || 'prensa') + ').',
+      182
+    )
+    doc.text(nota, 14, y)
+    y += nota.length * 5 + 6
+    doc.setTextColor(0)
+  }
+
+  if (votos && votos.length > 0) {
+    const filas = votos
+      .slice()
+      .sort((a, b) => (a.partido || 'ZZ').localeCompare(b.partido || 'ZZ') || (a.apellido || '').localeCompare(b.apellido || ''))
+      .map(vt => [vt.diputado, vt.partido || 'Sin partido', vt.region || '', OPCION_LABELS[vt.opcion] || vt.opcion])
+    doc.autoTable({
+      startY: y,
+      head: [['Nombre', 'Partido', 'Región', 'Voto']],
+      body: filas,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [15, 118, 110] },
+      margin: { left: 14, right: 14 }
+    })
+  } else {
+    doc.setFontSize(10)
+    doc.text('No hay desglose de votos individuales disponible para esta votación.', 14, y)
+  }
+
+  doc.setFontSize(8)
+  doc.setTextColor(140)
+  doc.text('Generado desde congreso-chile.vercel.app', 14, 290)
+
+  doc.save('votacion-' + camaraSel + '-' + (v.id || 'sn') + '.pdf')
 }
 
 const S = {
