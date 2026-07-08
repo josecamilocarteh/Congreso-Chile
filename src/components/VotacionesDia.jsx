@@ -24,10 +24,10 @@ function matchPersona(nombreApi, lista) {
   for (const it of lista) {
     let shared = 0
     for (const t of it.toks) if (q.has(t)) shared++
-    const score = shared + (it.sur && q.has(it.sur) ? 10 : 0)   // el apellido pesa y desempata
+    const score = shared * 10 + (it.sur && q.has(it.sur) ? 1 : 0)   // mandan las coincidencias; el apellido solo desempata
     if (score > bestScore) { bestScore = score; best = it.person }
   }
-  return bestScore >= 2 ? best : null
+  return bestScore >= 20 ? best : null   // exige al menos 2 tokens en común (nombre + apellido)
 }
 const DIP_TOKENS = diputados.map(d => ({ person: d, toks: new Set(norm(d.nombre).split(' ')), sur: surnameDe(d.nombre) }))
 function buscarDiputado(nombreApi) { return matchPersona(nombreApi, DIP_TOKENS) }
@@ -58,10 +58,16 @@ function boletinDe(texto) {
   return m ? m[1] : null
 }
 function fasesDe(texto) {
-  const t = (texto || '').toLowerCase()
+  const t = (texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const G = { label: 'Votación en general', color: '#0e7490' }
+  const P = { label: 'Votación en particular', color: '#7c3aed' }
+  if (/\bunica\b/.test(t)) return [G, P]
+  const general = /\bgeneral(es)?\b/.test(t) || /\bgral\b/.test(t) || /idea de legislar/.test(t)
+  const particular = /\bparticular(es)?\b/.test(t) || /indicaci/.test(t) ||
+    /art(iculo|\.)?\s*n?\s*\d/.test(t) || /numeral\s*\d/.test(t) || /inciso/.test(t)
   const out = []
-  if (t.includes('general')) out.push({ label: 'Votación en general', color: '#0e7490' })
-  if (t.includes('particular')) out.push({ label: 'Votación en particular', color: '#7c3aed' })
+  if (general) out.push(G)
+  if (particular) out.push(P)
   return out
 }
 function categoriaDe(v, tipoCamara) {
@@ -279,7 +285,11 @@ export default function VotacionesDia() {
     const titProy = bol ? titulos[bol] : undefined
     const artic = articulos[String(v.id)]
     const materia = materias[String(v.id)]                  // materia (página Cámara) para votaciones sin boletín
-    const fases = fasesDe([artic, v.tipo, v.descripcion].filter(Boolean).join(' '))
+    const esLey = !!(v.boletin || boletinDe(v.descripcion))
+    let fases = fasesDe([artic, v.tipo, v.descripcion, v.quorum].filter(Boolean).join(' '))
+    if (esLey && fases.length === 0) {
+      fases = [{ label: 'Votación en general', color: '#0e7490' }, { label: 'Votación en particular', color: '#7c3aed' }]
+    }
     const headline = (titProy && titProy.length) ? titProy
       : (materia && materia.length) ? materia
       : (v.descripcion || v.tipo || '(Sin descripción registrada)')
