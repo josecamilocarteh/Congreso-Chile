@@ -699,9 +699,96 @@ function generarPDFVotacion(v, votos, camaraSel) {
   }
 }
 
+function _hexToRgb(hex) {
+  const h = String(hex || '#94a3b8').replace('#', '')
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h
+  const n = parseInt(full, 16)
+  if (isNaN(n)) return [148, 163, 184]
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+// Agrupa los votos por partido y calcula el resumen (a favor / en contra / abstención)
+function _resumenPorPartido(votos) {
+  const map = {}
+  ;(votos || []).forEach(v => {
+    const p = v.partido || 'Sin partido'
+    if (!map[p]) map[p] = { si: 0, no: 0, abs: 0, otros: 0, total: 0, miembros: [] }
+    if (v.opcion === 'Afirmativo') map[p].si++
+    else if (v.opcion === 'En Contra') map[p].no++
+    else if (v.opcion === 'Abstencion') map[p].abs++
+    else map[p].otros++
+    map[p].total++
+    map[p].miembros.push(v)
+  })
+  return Object.entries(map).sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]))
+}
+
+// Dibuja el gráfico de barras apiladas por partido
+function _dibujarGraficoPartidos(doc, resumen, yIni) {
+  let y = yIni
+  if (y > 250) { doc.addPage(); y = 20 }
+
+  doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 23, 42)
+  doc.text('Votación por partido', 14, y)
+  doc.setFont(undefined, 'normal')
+  y += 6
+
+  doc.setFontSize(7)
+  const leyenda = [['A favor', [16, 185, 129]], ['Abstención', [245, 158, 11]], ['En contra', [239, 68, 68]]]
+  let lx = 14
+  leyenda.forEach(item => {
+    const c = item[1]
+    doc.setFillColor(c[0], c[1], c[2])
+    doc.rect(lx, y - 2.6, 3, 3, 'F')
+    doc.setTextColor(100)
+    doc.text(item[0], lx + 4.5, y)
+    lx += doc.getTextWidth(item[0]) + 13
+  })
+  doc.setTextColor(0)
+  y += 7
+
+  const barX = 48, barW = 104, barH = 4.4, gap = 7.6
+  resumen.forEach(item => {
+    const partido = item[0], r = item[1]
+    if (y > 274) { doc.addPage(); y = 20 }
+
+    const rgb = _hexToRgb(PARTIDO_COLORS[partido])
+    doc.setFillColor(rgb[0], rgb[1], rgb[2])
+    doc.circle(16, y - 1.4, 1.5, 'F')
+
+    doc.setFontSize(8); doc.setTextColor(15, 23, 42)
+    let nom = partido
+    while (doc.getTextWidth(nom) > 25 && nom.length > 3) nom = nom.slice(0, -1)
+    doc.text(nom, 20, y)
+
+    doc.setFillColor(226, 232, 240)
+    doc.rect(barX, y - 3.5, barW, barH, 'F')
+
+    let x = barX
+    const segs = [[r.si, [16, 185, 129]], [r.abs, [245, 158, 11]], [r.no, [239, 68, 68]], [r.otros, [148, 163, 184]]]
+    segs.forEach(s => {
+      const n = s[0], c = s[1]
+      if (!n) return
+      const w = (n / r.total) * barW
+      doc.setFillColor(c[0], c[1], c[2])
+      doc.rect(x, y - 3.5, w, barH, 'F')
+      x += w
+    })
+
+    doc.setFontSize(7.5); doc.setTextColor(71, 85, 105)
+    doc.text(r.si + ' / ' + r.no + ' / ' + r.abs, barX + barW + 4, y)
+    y += gap
+  })
+
+  doc.setTextColor(0)
+  return y + 4
+}
+
 function _construirYDescargarPDF(v, votos, camaraSel) {
   const { jsPDF } = window.jspdf
   const doc = new jsPDF()
+  const esSen = camaraSel === 'sen'
+  const rotulo = esSen ? 'senador' : 'diputado'
   const total = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbs || 0)
 
   doc.setFontSize(14)
@@ -709,7 +796,7 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
   doc.text('Congreso Nacional de Chile 2026-2030', 14, 18)
   doc.setFontSize(11)
   doc.setFont(undefined, 'normal')
-  doc.text(camaraSel === 'sen' ? 'Votación del Senado' : 'Votación de la Cámara de Diputados', 14, 25)
+  doc.text(esSen ? 'Votación del Senado' : 'Votación de la Cámara de Diputados', 14, 25)
   doc.setDrawColor(200)
   doc.line(14, 29, 196, 29)
 
@@ -747,27 +834,71 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
     doc.setTextColor(0)
   }
 
-  if (votos && votos.length > 0) {
-    const filas = votos
-      .slice()
-      .sort((a, b) => (a.partido || 'ZZ').localeCompare(b.partido || 'ZZ') || (a.apellido || '').localeCompare(b.apellido || ''))
-      .map(vt => [vt.diputado, vt.partido || 'Sin partido', vt.region || '', OPCION_LABELS[vt.opcion] || vt.opcion])
-    doc.autoTable({
-      startY: y,
-      head: [['Nombre', 'Partido', 'Región', 'Voto']],
-      body: filas,
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [15, 118, 110] },
-      margin: { left: 14, right: 14 }
-    })
-  } else {
+  if (!votos || votos.length === 0) {
     doc.setFontSize(10)
     doc.text('No hay desglose de votos individuales disponible para esta votación.', 14, y)
+  } else {
+    const resumen = _resumenPorPartido(votos)
+
+    // Gráfico de barras por partido
+    y = _dibujarGraficoPartidos(doc, resumen, y)
+
+    // Detalle agrupado por partido
+    if (y > 262) { doc.addPage(); y = 20 }
+    doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 23, 42)
+    doc.text('Detalle por ' + rotulo + ', agrupado por partido', 14, y)
+    doc.setFont(undefined, 'normal'); doc.setTextColor(0)
+    y += 7
+
+    resumen.forEach(item => {
+      const partido = item[0], r = item[1]
+      if (y > 256) { doc.addPage(); y = 20 }
+
+      const rgb = _hexToRgb(PARTIDO_COLORS[partido])
+      doc.setFillColor(rgb[0], rgb[1], rgb[2])
+      doc.rect(14, y - 4.2, 182, 6.4, 'F')
+      doc.setFontSize(8.5); doc.setFont(undefined, 'bold'); doc.setTextColor(255)
+      doc.text(partido + '  (' + r.total + ')', 17, y)
+      doc.text('A favor ' + r.si + '    En contra ' + r.no + '    Abstención ' + r.abs, 118, y)
+      doc.setTextColor(0); doc.setFont(undefined, 'normal')
+      y += 3.5
+
+      const ordenados = r.miembros.slice().sort((a, b) =>
+        (a.apellido || a.diputado || '').localeCompare(b.apellido || b.diputado || ''))
+
+      const head = esSen
+        ? [['Nombre', 'Región', 'Voto']]
+        : [['Nombre', 'Región', 'Distrito', 'Voto']]
+      const body = ordenados.map(m => esSen
+        ? [m.diputado, m.region || '', OPCION_LABELS[m.opcion] || m.opcion]
+        : [m.diputado, m.region || '', (m.distrito !== '' && m.distrito != null) ? 'D' + m.distrito : '', OPCION_LABELS[m.opcion] || m.opcion])
+
+      doc.autoTable({
+        startY: y,
+        head: head,
+        body: body,
+        styles: { fontSize: 7.5, cellPadding: 1.6, lineColor: [226, 232, 240], lineWidth: 0.1 },
+        headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontSize: 7, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [250, 251, 253] },
+        columnStyles: esSen
+          ? { 0: { cellWidth: 78 }, 1: { cellWidth: 62 }, 2: { cellWidth: 'auto' } }
+          : { 0: { cellWidth: 70 }, 1: { cellWidth: 55 }, 2: { cellWidth: 20 }, 3: { cellWidth: 'auto' } },
+        margin: { left: 14, right: 14 },
+        theme: 'grid'
+      })
+      y = (doc.lastAutoTable ? doc.lastAutoTable.finalY : y) + 8
+    })
   }
 
-  doc.setFontSize(8)
-  doc.setTextColor(140)
-  doc.text('Generado desde congreso-chile.vercel.app', 14, 290)
+  const paginas = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= paginas; i++) {
+    doc.setPage(i)
+    doc.setFontSize(8)
+    doc.setTextColor(140)
+    doc.text('Generado desde congreso-chile.vercel.app', 14, 290)
+    doc.text('Página ' + i + ' de ' + paginas, 196, 290, { align: 'right' })
+  }
+  doc.setTextColor(0)
 
   doc.save('votacion-' + camaraSel + '-' + (v.id || 'sn') + '.pdf')
 }
