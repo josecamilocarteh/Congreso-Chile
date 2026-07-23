@@ -854,6 +854,68 @@ function _dibujarGraficoPartidos(doc, resumen, yIni) {
   return y + 4
 }
 
+// Nombre legible del quórum (las APIs usan abreviaturas como "Q.C." o "L.O.C.")
+function _nombreQuorum(txt) {
+  const t = String(txt || '').trim()
+  const n = t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (/^q\.?\s*c\.?$/.test(n) || /calificado/.test(n)) return 'Quórum calificado'
+  if (/^l\.?\s*o\.?\s*c\.?$/.test(n) || /organic/.test(n)) return 'Ley orgánica constitucional'
+  if (/^q\.?\s*s\.?$/.test(n) || /simple|ordinar/.test(n)) return 'Quórum simple'
+  if (/interpretativ/.test(n)) return 'Ley interpretativa de la Constitución'
+  if (/reforma/.test(n)) return 'Reforma constitucional'
+  return t
+}
+
+// Votos necesarios según el quórum. N = miembros en ejercicio (155 diputados / 50 senadores)
+function _quorumRequerido(txt, esSen, presentes) {
+  const N = esSen ? 50 : 155
+  const n = String(txt || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const frac = f => Math.ceil(N * f)
+  const abs = () => Math.floor(N / 2) + 1
+  if (/2\s*\/\s*3|dos tercios/.test(n)) return { votos: frac(2 / 3), etiqueta: '2/3 de los en ejercicio' }
+  if (/3\s*\/\s*5|tres quintos|interpretativ/.test(n)) return { votos: frac(3 / 5), etiqueta: '3/5 de los en ejercicio' }
+  if (/4\s*\/\s*7|cuatro septimos|reforma/.test(n)) return { votos: frac(4 / 7), etiqueta: '4/7 de los en ejercicio' }
+  if (/2\s*\/\s*5|dos quintos/.test(n)) return { votos: frac(2 / 5), etiqueta: '2/5 de los en ejercicio' }
+  if (/1\s*\/\s*3|un tercio/.test(n)) return { votos: frac(1 / 3), etiqueta: '1/3 de los en ejercicio' }
+  if (/^l\.?\s*o\.?\s*c\.?$/.test(n) || /organic/.test(n)) return { votos: abs(), etiqueta: 'mayoría absoluta de los en ejercicio' }
+  if (/^q\.?\s*c\.?$/.test(n) || /calificado/.test(n)) return { votos: abs(), etiqueta: 'mayoría absoluta de los en ejercicio' }
+  if (/absoluta/.test(n)) return { votos: abs(), etiqueta: 'mayoría absoluta de los en ejercicio' }
+  if ((/simple|ordinar/.test(n) || /^q\.?\s*s\.?$/.test(n)) && presentes > 0) {
+    return { votos: Math.floor(presentes / 2) + 1, etiqueta: 'mayoría de los ' + presentes + ' presentes' }
+  }
+  return null
+}
+
+// Cuadro con el resultado: votos requeridos / obtenidos, resaltado en verde o rojo
+function _cuadroResultado(doc, y, req, aFavor, resultado) {
+  const aprobado = /aprob/i.test(String(resultado || '')) || (req ? aFavor >= req.votos : false)
+  const bg = aprobado ? [220, 252, 231] : [254, 226, 226]
+  const fg = aprobado ? [21, 128, 61] : [185, 28, 28]
+  const bd = aprobado ? [134, 239, 172] : [252, 165, 165]
+
+  doc.setFillColor(bg[0], bg[1], bg[2])
+  doc.setDrawColor(bd[0], bd[1], bd[2]); doc.setLineWidth(0.4)
+  doc.roundedRect(14, y, 182, 15, 2, 2, 'FD')
+
+  doc.setTextColor(fg[0], fg[1], fg[2])
+  doc.setFontSize(15); doc.setFont(undefined, 'bold')
+  const compacto = req ? (req.votos + ' / ' + aFavor) : String(aFavor)
+  doc.text(compacto, 19, y + 9.8)
+  const wc = doc.getTextWidth(compacto)
+  doc.setFontSize(11)
+  doc.text(String(resultado || (aprobado ? 'Aprobado' : 'Rechazado')).toUpperCase(), 19 + wc + 7, y + 9.8)
+
+  doc.setFontSize(7.5); doc.setFont(undefined, 'normal'); doc.setTextColor(85, 95, 108)
+  if (req) {
+    doc.text('Votos requeridos: ' + req.votos + '  (' + req.etiqueta + ')', 192, y + 6.2, { align: 'right' })
+    doc.text('Votos a favor obtenidos: ' + aFavor, 192, y + 11.6, { align: 'right' })
+  } else {
+    doc.text('Votos a favor: ' + aFavor, 192, y + 9.2, { align: 'right' })
+  }
+  doc.setTextColor(0); doc.setFont(undefined, 'normal')
+  return y + 20
+}
+
 function _construirYDescargarPDF(v, votos, camaraSel) {
   const { jsPDF } = window.jspdf
   const doc = new jsPDF()
@@ -870,18 +932,32 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
   doc.text(headlineLines, 14, y)
   y += headlineLines.length * 6 + 4
 
+  const presentes = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbs || 0)
+  const miembros = esSen ? 50 : 155
+  const emitidos = (votos && votos.length) ? votos.length : presentes + (v.totalDisp || 0)
+  const ausentes = Math.max(0, miembros - emitidos)
+  const req = _quorumRequerido(v.quorum, esSen, presentes)
+
   doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.setTextColor(0)
   if (v.boletin) { doc.text('Boletín: ' + v.boletin, 14, y); y += 6 }
   if (v.sesion) { doc.text('Sesión: ' + v.sesion, 14, y); y += 6 }
   if (v.fecha) { doc.text('Fecha: ' + v.fecha, 14, y); y += 6 }
-  if (v.quorum) { doc.text('Quórum: ' + v.quorum, 14, y); y += 6 }
+  if (v.quorum) {
+    const txtQ = 'Quórum: ' + _nombreQuorum(v.quorum) + (req ? ' — ' + req.votos + ' votos requeridos' : '')
+    doc.text(txtQ, 14, y); y += 6
+  }
   doc.text('Resultado: ' + (v.resultado || '—'), 14, y); y += 6
   doc.text(
     'Votos - A favor: ' + (v.totalSi || 0) + '   En contra: ' + (v.totalNo || 0) +
     '   Abstención: ' + (v.totalAbs || 0) + (total ? '   (Total: ' + total + ')' : ''),
     14, y
   )
+  y += 6
+  doc.text('Ausentes: ' + ausentes + ' de ' + miembros + ' (' + emitidos + ' registraron voto)', 14, y)
   y += 10
+
+  // Cuadro con el resultado frente al quórum exigido
+  y = _cuadroResultado(doc, y, req, v.totalSi || 0, v.resultado)
 
   if (v.fuente === 'manual') {
     doc.setTextColor(150, 90, 10)
