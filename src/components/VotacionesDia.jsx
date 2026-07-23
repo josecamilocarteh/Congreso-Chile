@@ -707,15 +707,46 @@ function _hexToRgb(hex) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
-// Agrupa los votos por partido y calcula el resumen (a favor / en contra / abstención)
+// Colores de cada opción de voto (fondo y texto) para resaltar en las tablas
+const _VOTO_ESTILO = {
+  'A favor':     { bg: [220, 252, 231], fg: [21, 128, 61] },
+  'En contra':   { bg: [254, 226, 226], fg: [185, 28, 28] },
+  'Abstención':  { bg: [254, 243, 199], fg: [180, 83, 9] },
+  'No vota':     { bg: [241, 245, 249], fg: [100, 116, 139] },
+  'Dispensado':  { bg: [241, 245, 249], fg: [100, 116, 139] },
+  'Pareado':     { bg: [241, 245, 249], fg: [100, 116, 139] }
+}
+
+// --- Símbolos dibujados con líneas (las fuentes del PDF no traen ✓ ni ✗) ---
+function _icoTick(doc, x, y) {          // ✓ verde
+  doc.setDrawColor(16, 185, 129); doc.setLineWidth(0.5)
+  doc.line(x, y - 1.1, x + 0.85, y - 0.25)
+  doc.line(x + 0.85, y - 0.25, x + 2.3, y - 2.4)
+}
+function _icoCruz(doc, x, y) {          // ✗ roja
+  doc.setDrawColor(239, 68, 68); doc.setLineWidth(0.5)
+  doc.line(x, y - 2.3, x + 2.1, y - 0.3)
+  doc.line(x + 2.1, y - 2.3, x, y - 0.3)
+}
+function _icoAbs(doc, x, y) {           // círculo lleno ámbar (abstención)
+  doc.setFillColor(245, 158, 11)
+  doc.circle(x + 1.05, y - 1.25, 1.05, 'F')
+}
+function _icoNoVota(doc, x, y) {        // círculo vacío gris (no votó)
+  doc.setDrawColor(148, 163, 184); doc.setLineWidth(0.4)
+  doc.circle(x + 1.05, y - 1.25, 1.05, 'S')
+}
+
+// Agrupa los votos por partido y calcula el resumen
 function _resumenPorPartido(votos) {
   const map = {}
   ;(votos || []).forEach(v => {
     const p = v.partido || 'Sin partido'
-    if (!map[p]) map[p] = { si: 0, no: 0, abs: 0, otros: 0, total: 0, miembros: [] }
+    if (!map[p]) map[p] = { si: 0, no: 0, abs: 0, noVota: 0, otros: 0, total: 0, miembros: [] }
     if (v.opcion === 'Afirmativo') map[p].si++
     else if (v.opcion === 'En Contra') map[p].no++
     else if (v.opcion === 'Abstencion') map[p].abs++
+    else if (v.opcion === 'No Vota') map[p].noVota++
     else map[p].otros++
     map[p].total++
     map[p].miembros.push(v)
@@ -723,49 +754,73 @@ function _resumenPorPartido(votos) {
   return Object.entries(map).sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]))
 }
 
-// Dibuja el gráfico de barras apiladas por partido
+// Encabezado con el logo del asesor
+function _dibujarEncabezado(doc, esSen) {
+  doc.setFontSize(14); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 23, 42)
+  doc.text('Congreso Nacional de Chile 2026-2030', 14, 18)
+  doc.setFontSize(11); doc.setFont(undefined, 'normal'); doc.setTextColor(71, 85, 105)
+  doc.text(esSen ? 'Votación del Senado' : 'Votación de la Cámara de Diputados', 14, 25)
+
+  // Logo: círculo con iniciales + nombre
+  doc.setFillColor(15, 118, 110)
+  doc.circle(188, 17, 6.4, 'F')
+  doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(255)
+  doc.text('JC', 188, 19, { align: 'center' })
+  doc.setFontSize(8.5); doc.setTextColor(15, 23, 42)
+  doc.text('José Camilo Carte Hernández', 179, 15.5, { align: 'right' })
+  doc.setFontSize(7.5); doc.setFont(undefined, 'normal'); doc.setTextColor(120, 130, 145)
+  doc.text('Asesor Legislativo', 179, 20, { align: 'right' })
+
+  doc.setTextColor(0)
+  doc.setDrawColor(200); doc.setLineWidth(0.2)
+  doc.line(14, 29, 196, 29)
+}
+
+// Gráfico de barras por partido, con el detalle de votos a la derecha
 function _dibujarGraficoPartidos(doc, resumen, yIni) {
   let y = yIni
-  if (y > 250) { doc.addPage(); y = 20 }
+  if (y > 244) { doc.addPage(); y = 22 }
 
   doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 23, 42)
   doc.text('Votación por partido', 14, y)
   doc.setFont(undefined, 'normal')
   y += 6
 
-  doc.setFontSize(7)
-  const leyenda = [['A favor', [16, 185, 129]], ['Abstención', [245, 158, 11]], ['En contra', [239, 68, 68]]]
+  // Leyenda con los mismos símbolos que se usan en cada fila
+  doc.setFontSize(7); doc.setTextColor(100)
   let lx = 14
+  const leyenda = [['A favor', _icoTick], ['En contra', _icoCruz], ['Abstención', _icoAbs], ['No votó', _icoNoVota]]
   leyenda.forEach(item => {
-    const c = item[1]
-    doc.setFillColor(c[0], c[1], c[2])
-    doc.rect(lx, y - 2.6, 3, 3, 'F')
+    item[1](doc, lx, y)
     doc.setTextColor(100)
-    doc.text(item[0], lx + 4.5, y)
-    lx += doc.getTextWidth(item[0]) + 13
+    doc.text(item[0], lx + 3.8, y)
+    lx += doc.getTextWidth(item[0]) + 12
   })
   doc.setTextColor(0)
   y += 7
 
-  const barX = 48, barW = 104, barH = 4.4, gap = 7.6
+  const barX = 44, barW = 86, barH = 4.4, gap = 7.8
+  const colX = [136, 151, 166, 181]   // columnas de conteo a la derecha
+
   resumen.forEach(item => {
     const partido = item[0], r = item[1]
-    if (y > 274) { doc.addPage(); y = 20 }
+    if (y > 272) { doc.addPage(); y = 22 }
 
+    // Punto con el color del partido y su nombre
     const rgb = _hexToRgb(PARTIDO_COLORS[partido])
     doc.setFillColor(rgb[0], rgb[1], rgb[2])
     doc.circle(16, y - 1.4, 1.5, 'F')
-
-    doc.setFontSize(8); doc.setTextColor(15, 23, 42)
+    doc.setFontSize(8); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 23, 42)
     let nom = partido
-    while (doc.getTextWidth(nom) > 25 && nom.length > 3) nom = nom.slice(0, -1)
+    while (doc.getTextWidth(nom) > 23 && nom.length > 3) nom = nom.slice(0, -1)
     doc.text(nom, 20, y)
+    doc.setFont(undefined, 'normal')
 
+    // Barra apilada
     doc.setFillColor(226, 232, 240)
     doc.rect(barX, y - 3.5, barW, barH, 'F')
-
     let x = barX
-    const segs = [[r.si, [16, 185, 129]], [r.abs, [245, 158, 11]], [r.no, [239, 68, 68]], [r.otros, [148, 163, 184]]]
+    const segs = [[r.si, [16, 185, 129]], [r.abs, [245, 158, 11]], [r.no, [239, 68, 68]], [r.noVota + r.otros, [203, 213, 225]]]
     segs.forEach(s => {
       const n = s[0], c = s[1]
       if (!n) return
@@ -775,8 +830,23 @@ function _dibujarGraficoPartidos(doc, resumen, yIni) {
       x += w
     })
 
-    doc.setFontSize(7.5); doc.setTextColor(71, 85, 105)
-    doc.text(r.si + ' / ' + r.no + ' / ' + r.abs, barX + barW + 4, y)
+    // Detalle a la derecha: ✓ a favor · ✗ en contra · abstención · no votó
+    doc.setFontSize(7.5)
+    const datos = [
+      [_icoTick, r.si, [21, 128, 61]],
+      [_icoCruz, r.no, [185, 28, 28]],
+      [_icoAbs, r.abs, [180, 83, 9]],
+      [_icoNoVota, r.noVota + r.otros, [100, 116, 139]]
+    ]
+    datos.forEach((d, k) => {
+      const px = colX[k]
+      d[0](doc, px, y)
+      const col = d[1] > 0 ? d[2] : [190, 196, 205]
+      doc.setTextColor(col[0], col[1], col[2])
+      doc.setFont(undefined, d[1] > 0 ? 'bold' : 'normal')
+      doc.text(String(d[1]), px + 4.2, y)
+    })
+    doc.setFont(undefined, 'normal'); doc.setTextColor(0)
     y += gap
   })
 
@@ -791,25 +861,16 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
   const rotulo = esSen ? 'senador' : 'diputado'
   const total = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbs || 0)
 
-  doc.setFontSize(14)
-  doc.setFont(undefined, 'bold')
-  doc.text('Congreso Nacional de Chile 2026-2030', 14, 18)
-  doc.setFontSize(11)
-  doc.setFont(undefined, 'normal')
-  doc.text(esSen ? 'Votación del Senado' : 'Votación de la Cámara de Diputados', 14, 25)
-  doc.setDrawColor(200)
-  doc.line(14, 29, 196, 29)
+  _dibujarEncabezado(doc, esSen)
 
   let y = 38
-  doc.setFontSize(12)
-  doc.setFont(undefined, 'bold')
+  doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 23, 42)
   const headline = v.descripcion || v.tipo || '(Sin descripción registrada)'
   const headlineLines = doc.splitTextToSize(headline, 182)
   doc.text(headlineLines, 14, y)
   y += headlineLines.length * 6 + 4
 
-  doc.setFontSize(10)
-  doc.setFont(undefined, 'normal')
+  doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.setTextColor(0)
   if (v.boletin) { doc.text('Boletín: ' + v.boletin, 14, y); y += 6 }
   if (v.sesion) { doc.text('Sesión: ' + v.sesion, 14, y); y += 6 }
   if (v.fecha) { doc.text('Fecha: ' + v.fecha, 14, y); y += 6 }
@@ -840,26 +901,29 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
   } else {
     const resumen = _resumenPorPartido(votos)
 
-    // Gráfico de barras por partido
     y = _dibujarGraficoPartidos(doc, resumen, y)
 
-    // Detalle agrupado por partido
-    if (y > 262) { doc.addPage(); y = 20 }
+    if (y > 258) { doc.addPage(); y = 22 }
     doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 23, 42)
     doc.text('Detalle por ' + rotulo + ', agrupado por partido', 14, y)
     doc.setFont(undefined, 'normal'); doc.setTextColor(0)
     y += 7
 
+    const colVoto = esSen ? 2 : 3
+
     resumen.forEach(item => {
       const partido = item[0], r = item[1]
-      if (y > 256) { doc.addPage(); y = 20 }
+      if (y > 250) { doc.addPage(); y = 22 }
 
+      // Franja con el color del partido
       const rgb = _hexToRgb(PARTIDO_COLORS[partido])
       doc.setFillColor(rgb[0], rgb[1], rgb[2])
       doc.rect(14, y - 4.2, 182, 6.4, 'F')
       doc.setFontSize(8.5); doc.setFont(undefined, 'bold'); doc.setTextColor(255)
       doc.text(partido + '  (' + r.total + ')', 17, y)
-      doc.text('A favor ' + r.si + '    En contra ' + r.no + '    Abstención ' + r.abs, 118, y)
+      doc.setFontSize(7.5)
+      doc.text('A favor ' + r.si + '    En contra ' + r.no + '    Abstención ' + r.abs +
+        '    No votó ' + (r.noVota + r.otros), 196 - 3, y, { align: 'right' })
       doc.setTextColor(0); doc.setFont(undefined, 'normal')
       y += 3.5
 
@@ -873,30 +937,53 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
         ? [m.diputado, m.region || '', OPCION_LABELS[m.opcion] || m.opcion]
         : [m.diputado, m.region || '', (m.distrito !== '' && m.distrito != null) ? 'D' + m.distrito : '', OPCION_LABELS[m.opcion] || m.opcion])
 
+      // Fila de resumen al pie de cada cuadro
+      const resumenTxt = 'A favor ' + r.si + '  ·  En contra ' + r.no + '  ·  Abstención ' + r.abs +
+        '  ·  No votó ' + (r.noVota + r.otros)
+      const foot = esSen
+        ? [[{ content: 'Resumen ' + partido, styles: { halign: 'left' } }, { content: resumenTxt, colSpan: 2, styles: { halign: 'right' } }]]
+        : [[{ content: 'Resumen ' + partido, styles: { halign: 'left' } }, { content: resumenTxt, colSpan: 3, styles: { halign: 'right' } }]]
+
       doc.autoTable({
         startY: y,
         head: head,
         body: body,
+        foot: foot,
         styles: { fontSize: 7.5, cellPadding: 1.6, lineColor: [226, 232, 240], lineWidth: 0.1 },
         headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontSize: 7, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [250, 251, 253] },
+        footStyles: { fillColor: [248, 250, 252], textColor: [51, 65, 85], fontSize: 7, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [252, 253, 254] },
         columnStyles: esSen
-          ? { 0: { cellWidth: 78 }, 1: { cellWidth: 62 }, 2: { cellWidth: 'auto' } }
-          : { 0: { cellWidth: 70 }, 1: { cellWidth: 55 }, 2: { cellWidth: 20 }, 3: { cellWidth: 'auto' } },
+          ? { 0: { cellWidth: 78 }, 1: { cellWidth: 62 }, 2: { cellWidth: 'auto', halign: 'center' } }
+          : { 0: { cellWidth: 70 }, 1: { cellWidth: 55 }, 2: { cellWidth: 20, halign: 'center' }, 3: { cellWidth: 'auto', halign: 'center' } },
         margin: { left: 14, right: 14 },
-        theme: 'grid'
+        theme: 'grid',
+        didParseCell: function (data) {
+          if (data.section === 'body' && data.column.index === colVoto) {
+            const est = _VOTO_ESTILO[String(data.cell.raw)]
+            if (est) {
+              data.cell.styles.fillColor = est.bg
+              data.cell.styles.textColor = est.fg
+              data.cell.styles.fontStyle = 'bold'
+            }
+          }
+        }
       })
       y = (doc.lastAutoTable ? doc.lastAutoTable.finalY : y) + 8
     })
   }
 
+  // Pie de página en todas las páginas
   const paginas = doc.internal.getNumberOfPages()
   for (let i = 1; i <= paginas; i++) {
     doc.setPage(i)
-    doc.setFontSize(8)
-    doc.setTextColor(140)
-    doc.text('Generado desde congreso-chile.vercel.app', 14, 290)
-    doc.text('Página ' + i + ' de ' + paginas, 196, 290, { align: 'right' })
+    doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2)
+    doc.line(14, 284, 196, 284)
+    doc.setFontSize(7.5); doc.setTextColor(120, 130, 145)
+    doc.text('José Camilo Carte Hernández · Asesor Legislativo', 14, 288.5)
+    doc.text('Página ' + i + ' de ' + paginas, 196, 288.5, { align: 'right' })
+    doc.setFontSize(7); doc.setTextColor(150, 158, 170)
+    doc.text('Generado desde Congreso Chile · congreso-chile.vercel.app', 14, 292.5)
   }
   doc.setTextColor(0)
 
