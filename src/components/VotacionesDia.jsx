@@ -754,6 +754,35 @@ function _resumenPorPartido(votos) {
   return Object.entries(map).sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]))
 }
 
+// --- Logo del asesor: se precarga en segundo plano apenas se carga este archivo, ---
+// --- para que ya esté listo (como data URL) cuando el usuario hace clic en "PDF". ---
+// --- Así el clic sigue siendo 100% síncrono (necesario para que Safari no bloquee ---
+// --- la descarga) y si por algún motivo el logo no llegó a cargar, el círculo "JC" ---
+// --- de respaldo sigue funcionando igual que antes. ---
+let _logoCache = null // null = aún no se intentó · false = falló · objeto = listo
+function _cargarLogo() {
+  if (_logoCache !== null) return
+  try {
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas')
+        c.width = img.naturalWidth
+        c.height = img.naturalHeight
+        c.getContext('2d').drawImage(img, 0, 0)
+        _logoCache = { dataUrl: c.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight }
+      } catch (e) {
+        _logoCache = false
+      }
+    }
+    img.onerror = () => { _logoCache = false }
+    img.src = '/logo-jcc.png'
+  } catch (e) {
+    _logoCache = false
+  }
+}
+if (typeof window !== 'undefined') _cargarLogo()
+
 // Encabezado con el logo del asesor
 function _dibujarEncabezado(doc, esSen) {
   doc.setFontSize(14); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 23, 42)
@@ -761,15 +790,24 @@ function _dibujarEncabezado(doc, esSen) {
   doc.setFontSize(11); doc.setFont(undefined, 'normal'); doc.setTextColor(71, 85, 105)
   doc.text(esSen ? 'Votación del Senado' : 'Votación de la Cámara de Diputados', 14, 25)
 
-  // Logo: círculo con iniciales + nombre
-  doc.setFillColor(15, 118, 110)
-  doc.circle(188, 17, 6.4, 'F')
-  doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(255)
-  doc.text('JC', 188, 19, { align: 'center' })
-  doc.setFontSize(8.5); doc.setTextColor(15, 23, 42)
-  doc.text('José Camilo Carte Hernández', 179, 15.5, { align: 'right' })
-  doc.setFontSize(7.5); doc.setFont(undefined, 'normal'); doc.setTextColor(120, 130, 145)
-  doc.text('Asesor Legislativo', 179, 20, { align: 'right' })
+  if (_logoCache) {
+    // Logo del usuario, respetando su proporción original. El logo ya incluye
+    // el nombre y el cargo, así que no se repite el texto al lado.
+    const altoMM = 13
+    const anchoMM = altoMM * (_logoCache.w / _logoCache.h)
+    const xDer = 196
+    doc.addImage(_logoCache.dataUrl, 'PNG', xDer - anchoMM, 8, anchoMM, altoMM)
+  } else {
+    // Respaldo: círculo con iniciales + nombre (por si el logo no cargó a tiempo)
+    doc.setFillColor(15, 118, 110)
+    doc.circle(188, 17, 6.4, 'F')
+    doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(255)
+    doc.text('JC', 188, 19, { align: 'center' })
+    doc.setFontSize(8.5); doc.setTextColor(15, 23, 42)
+    doc.text('José Camilo Carte Hernández', 179, 15.5, { align: 'right' })
+    doc.setFontSize(7.5); doc.setFont(undefined, 'normal'); doc.setTextColor(120, 130, 145)
+    doc.text('Asesor Legislativo', 179, 20, { align: 'right' })
+  }
 
   doc.setTextColor(0)
   doc.setDrawColor(200); doc.setLineWidth(0.2)
