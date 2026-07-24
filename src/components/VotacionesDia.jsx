@@ -934,8 +934,12 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
 
   const presentes = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbs || 0)
   const miembros = esSen ? 50 : 155
-  const emitidos = (votos && votos.length) ? votos.length : presentes + (v.totalDisp || 0)
-  const ausentes = Math.max(0, miembros - emitidos)
+  // Emitieron voto = a favor + en contra + abstención.
+  // Todo el resto (no votó, dispensados, pareos y quienes no figuran en el registro) es ausente.
+  const efectivos = (votos && votos.length)
+    ? votos.filter(x => x.opcion === 'Afirmativo' || x.opcion === 'En Contra' || x.opcion === 'Abstencion').length
+    : presentes
+  const ausentes = Math.max(0, miembros - efectivos)
   const req = _quorumRequerido(v.quorum, esSen, presentes)
 
   doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.setTextColor(0)
@@ -949,11 +953,12 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
   doc.text('Resultado: ' + (v.resultado || '—'), 14, y); y += 6
   doc.text(
     'Votos - A favor: ' + (v.totalSi || 0) + '   En contra: ' + (v.totalNo || 0) +
-    '   Abstención: ' + (v.totalAbs || 0) + (total ? '   (Total: ' + total + ')' : ''),
+    '   Abstención: ' + (v.totalAbs || 0) + '   (Votos emitidos: ' + efectivos + ')',
     14, y
   )
   y += 6
-  doc.text('Ausentes: ' + ausentes + ' de ' + miembros + ' (' + emitidos + ' registraron voto)', 14, y)
+  doc.text('Ausentes o sin votar: ' + ausentes + ' de ' + miembros +
+    '   (' + efectivos + ' emitieron voto + ' + ausentes + ' sin votar = ' + miembros + ')', 14, y)
   y += 10
 
   // Cuadro con el resultado frente al quórum exigido
