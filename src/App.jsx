@@ -5,6 +5,7 @@ import SimuladorQuorum from './components/SimuladorQuorum'
 import Votaciones from './components/Votaciones'
 import VotacionesSenado from './components/VotacionesSenado'
 import VotacionesDia from './components/VotacionesDia'
+import VotacionesClave from './components/VotacionesClave'
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 720 : false)
@@ -27,6 +28,7 @@ export default function App() {
     ['votaciones', '🗳 Votaciones Cámara', '#0f766e'],
     ['votsenado', '🏛 Votaciones Senado', '#7c3aed'],
     ['votdia', '🗓 Votaciones por día', '#0f766e'],
+    ['clave', '🎯 Votaciones Clave', '#be123c'],
   ]
 
   return (
@@ -73,7 +75,7 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '20px 12px 48px' : '32px 20px 60px' }}>
-        {tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : tab === 'simulador' ? <SimuladorQuorum /> : tab === 'votaciones' ? <Votaciones /> : tab === 'votsenado' ? <VotacionesSenado /> : <VotacionesDia />}
+        {tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : tab === 'simulador' ? <SimuladorQuorum /> : tab === 'votaciones' ? <Votaciones /> : tab === 'votsenado' ? <VotacionesSenado /> : tab === 'votdia' ? <VotacionesDia /> : <VotacionesClave />}
       </main>
 
       <footer style={styles.footer}>
