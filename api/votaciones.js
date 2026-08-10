@@ -137,6 +137,38 @@ export default async function handler(req, res) {
       return res.status(200).json({ votaciones: votaciones, advertencias: advertencias })
     }
 
+    // Votaciones del Senado por RANGO de fechas (una sola llamada).
+    // Usado por el buscador de Votaciones Clave. La API del Senado ya devuelve
+    // los votos individuales incluidos, así que no hace falta un segundo fetch.
+    if (req.query.senadoRango) {
+      const desde = String(req.query.desde || '')
+      const hasta = String(req.query.hasta || '')
+      function aDMY(iso) {
+        const p = String(iso).split('-')
+        if (p.length !== 3) return ''
+        return parseInt(p[2], 10) + '/' + parseInt(p[1], 10) + '/' + p[0]
+      }
+      const d1 = aDMY(desde), d2 = aDMY(hasta)
+      if (!d1 || !d2) return res.status(200).json({ error: 'fechas inválidas (usa YYYY-MM-DD)', votaciones: [] })
+      const legiR = req.query.legi ? String(req.query.legi).replace(/[^0-9]/g, '') : '507'
+      const urlR = 'https://web-back.senado.cl/api/votes?id_legislatura=' + legiR +
+        '&limit=500&offset=0&palabra_clave=&desde=' + encodeURIComponent(d1) + '&hasta=' + encodeURIComponent(d2)
+      const rR = await fetch(urlR, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } })
+      if (!rR.ok) return res.status(200).json({ error: 'API Senado código ' + rR.status, votaciones: [] })
+      const jR = await rR.json()
+      const arrR = (jR && jR.data && jR.data.data) || []
+      let votacionesR = arrR.map(parsearVotacionSenado)
+      // Sumar las votaciones cargadas a mano que caigan dentro del rango
+      VOTACIONES_MANUALES.forEach(function (m) {
+        if (m.fecha >= desde && m.fecha <= hasta) {
+          const ya = votacionesR.some(function (v) { return v.boletin === m.boletin && v.descripcion === m.descripcion })
+          if (!ya) votacionesR.push(Object.assign({}, m))
+        }
+      })
+      votacionesR.sort(function (a, b) { return (b.fecha || '').localeCompare(a.fecha || '') })
+      return res.status(200).json({ votaciones: votacionesR })
+    }
+
     // Votaciones del Senado por boletín
     if (req.query.senado) {
       const num = String(req.query.senado).split('-')[0]
