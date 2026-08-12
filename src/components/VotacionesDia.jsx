@@ -954,6 +954,29 @@ function _cuadroResultado(doc, y, req, aFavor, resultado) {
   return y + 20
 }
 
+// Cuadro resumen al inicio: tres casillas grandes con los totales
+function _cuadroResumen(doc, y, si, no, abs) {
+  const cajas = [
+    ['A favor', si, [220, 252, 231], [21, 128, 61], [134, 239, 172]],
+    ['En contra', no, [254, 226, 226], [185, 28, 28], [252, 165, 165]],
+    ['Abstención', abs, [254, 243, 199], [180, 83, 9], [253, 211, 120]]
+  ]
+  const w = 58, gap = 4, x0 = 14
+  cajas.forEach((c, i) => {
+    const x = x0 + i * (w + gap)
+    doc.setFillColor(c[2][0], c[2][1], c[2][2])
+    doc.setDrawColor(c[4][0], c[4][1], c[4][2]); doc.setLineWidth(0.4)
+    doc.roundedRect(x, y, w, 18, 2, 2, 'FD')
+    doc.setTextColor(c[3][0], c[3][1], c[3][2])
+    doc.setFontSize(8.5); doc.setFont(undefined, 'bold')
+    doc.text(c[0], x + w / 2, y + 6, { align: 'center' })
+    doc.setFontSize(18)
+    doc.text(String(c[1]), x + w / 2, y + 14.8, { align: 'center' })
+  })
+  doc.setTextColor(0); doc.setFont(undefined, 'normal')
+  return y + 18 + 6
+}
+
 function _construirYDescargarPDF(v, votos, camaraSel) {
   const { jsPDF } = window.jspdf
   const doc = new jsPDF()
@@ -998,6 +1021,9 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
   doc.text('Ausentes o sin votar: ' + ausentes + ' de ' + miembros +
     '   (' + efectivos + ' emitieron voto + ' + ausentes + ' sin votar = ' + miembros + ')', 14, y)
   y += 10
+
+  // Resumen al inicio: totales a favor / en contra / abstención
+  y = _cuadroResumen(doc, y, v.totalSi || 0, v.totalNo || 0, v.totalAbs || 0)
 
   // Cuadro con el resultado frente al quórum exigido
   y = _cuadroResultado(doc, y, req, v.totalSi || 0, v.resultado)
