@@ -112,6 +112,7 @@ export default function VotacionesDia() {
   const [senLoading, setSenLoading] = useState(false)
   const [senAdvertencias, setSenAdvertencias] = useState([])  // avisos de posibles huecos/datos manuales
   const [generandoPDF, setGenerandoPDF] = useState(null)      // id de la votación cuyo PDF se está generando
+  const [generandoPDFDia, setGenerandoPDFDia] = useState(false)
 
   useEffect(() => {
     let activo = true
@@ -461,6 +462,42 @@ export default function VotacionesDia() {
     )
   }
 
+  // Votaciones EN GENERAL de proyectos de ley del día: la 1ª votación de cada boletín.
+  const generalesDia = delDia.filter(v => {
+    if (categoriaDe(v, tiposCamara[String(v.id)]) !== 'ley') return false
+    const b = v.boletin || boletinDe(v.descripcion)
+    const lista = ordenBoletin[b] || []
+    return lista.length > 0 && String(v.id) === lista[0]
+  })
+
+  async function descargarPDFDia() {
+    if (generalesDia.length === 0) { alert('No hay votaciones en general de proyectos de ley este día.'); return }
+    const faltan = camara === 'sen' ? [] : generalesDia.filter(v => !(detalles[v.id] && detalles[v.id].votos))
+    if (faltan.length === 0) {
+      const proyectos = generalesDia.map(v => {
+        const b = v.boletin || boletinDe(v.descripcion)
+        const votos = camara === 'sen' ? enriquecer(v.votos || [], true) : (detalles[v.id]?.votos || [])
+        return { votacion: v, votos, titulo: titulos[b], boletin: b }
+      })
+      _construirPDFDia(proyectos, camara)
+      return
+    }
+    setGenerandoPDFDia(true)
+    try {
+      for (const v of faltan) {
+        const res = await fetch(`/api/votaciones?votacionId=${v.id}`)
+        const data = await res.json()
+        const votos = !data.error ? enriquecer(data.votos || []) : []
+        setDetalles(prev => ({ ...prev, [v.id]: { votos } }))
+      }
+      alert('Ya cargué los datos de las ' + generalesDia.length + ' votaciones. Toca el botón una vez más para descargar el PDF.')
+    } catch (e) {
+      alert('No se pudieron cargar todos los votos. Intenta de nuevo.')
+    } finally {
+      setGenerandoPDFDia(false)
+    }
+  }
+
   return (
     <div>
       {/* AGENDA / TABLAS */}
@@ -543,6 +580,23 @@ export default function VotacionesDia() {
             <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', textTransform: 'capitalize' }}>{formatFecha(fecha)}{camara === 'sen' ? ' · Senado' : ''}</div>
             <div style={{ fontSize: 12, color: '#94a3b8' }}>{delDia.length} {delDia.length === 1 ? 'votación' : 'votaciones'}</div>
           </div>
+
+          {generalesDia.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <button onClick={descargarPDFDia} disabled={generandoPDFDia}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 9, border: 'none',
+                  background: generandoPDFDia ? '#94a3b8' : '#0f766e', color: 'white', fontWeight: 700, fontSize: 13,
+                  cursor: generandoPDFDia ? 'default' : 'pointer'
+                }}>
+                {generandoPDFDia ? '⏳ Cargando…' : '📄 PDF de votaciones en general del día'}
+                <span style={{ fontWeight: 500, fontSize: 12, opacity: 0.85 }}>({generalesDia.length} proyecto{generalesDia.length !== 1 ? 's' : ''})</span>
+              </button>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 5 }}>
+                Un solo PDF con la votación en general de cada proyecto de ley votado hoy.
+              </div>
+            </div>
+          )}
 
           {camara === 'sen' && senAdvertencias.length > 0 && (
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '10px 14px', marginBottom: 14 }}>
@@ -1205,6 +1259,77 @@ function _construirYDescargarPDF(v, votos, camaraSel) {
 
   doc.save('votacion-' + camaraSel + '-' + (v.id || 'sn') + '.pdf')
 }
+
+// PDF del día: reúne las votaciones EN GENERAL de los proyectos de ley del día.
+// Reutiliza los mismos ayudantes del PDF individual (encabezado, cajas, gráfico).
+function _construirPDFDia(proyectos, camaraSel) {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('El generador de PDF todavía está cargando. Espera un segundo y vuelve a intentarlo.')
+    return
+  }
+  const { jsPDF } = window.jspdf
+  const doc = new jsPDF()
+  const esSen = camaraSel === 'sen'
+  _dibujarEncabezado(doc, esSen)
+
+  let y = 38
+  doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 23, 42)
+  doc.text('Votaciones en general de proyectos de ley', 14, y)
+  y += 6
+  doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.setTextColor(71, 85, 105)
+  const fechaTxt = (proyectos[0] && proyectos[0].votacion && proyectos[0].votacion.fecha) ? proyectos[0].votacion.fecha : ''
+  doc.text(fechaTxt + '   ·   ' + proyectos.length + ' proyecto' + (proyectos.length !== 1 ? 's' : ''), 14, y)
+  doc.setTextColor(0)
+  y += 10
+
+  proyectos.forEach((p, idx) => {
+    const v = p.votacion, votos = p.votos
+    if (y > 198) { doc.addPage(); y = 22 }
+
+    doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.4); doc.line(14, y - 2, 196, y - 2)
+    y += 5
+
+    doc.setFontSize(11.5); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 118, 110)
+    const titulo = (idx + 1) + '. ' + (p.titulo && p.titulo.length ? p.titulo : ('Boletín ' + (p.boletin || '')))
+    const tl = doc.splitTextToSize(titulo, 182)
+    doc.text(tl, 14, y)
+    y += tl.length * 5.5 + 1
+
+    doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(71, 85, 105)
+    const presentes = (v.totalSi || 0) + (v.totalNo || 0) + (v.totalAbs || 0)
+    const req = _quorumRequerido(v.quorum, esSen, presentes)
+    const meta = 'Boletín ' + (p.boletin || '—') +
+      (v.quorum ? '   ·   ' + _nombreQuorum(v.quorum) + (req ? ' (' + req.votos + ' req.)' : '') : '') +
+      '   ·   ' + (v.resultado || '—')
+    doc.text(meta, 14, y)
+    doc.setTextColor(0)
+    y += 6
+
+    y = _cuadroResumen(doc, y, v.totalSi || 0, v.totalNo || 0, v.totalAbs || 0)
+    y = _cuadroResultado(doc, y, req, v.totalSi || 0, v.resultado)
+
+    if (votos && votos.length) {
+      const resumen = _resumenPorPartido(votos)
+      y = _dibujarGraficoPartidos(doc, resumen, y)
+    }
+    y += 4
+  })
+
+  const paginas = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= paginas; i++) {
+    doc.setPage(i)
+    doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2)
+    doc.line(14, 284, 196, 284)
+    doc.setFontSize(7.5); doc.setTextColor(120, 130, 145)
+    doc.text('José Camilo Carte Hernández · Asesor Legislativo', 14, 288.5)
+    doc.text('Página ' + i + ' de ' + paginas, 196, 288.5, { align: 'right' })
+    doc.setFontSize(7); doc.setTextColor(150, 158, 170)
+    doc.text('Generado desde Congreso Chile · congreso-chile.vercel.app', 14, 292.5)
+  }
+  doc.setTextColor(0)
+  doc.save('votaciones-generales-' + camaraSel + '-' + fechaTxt + '.pdf')
+}
+
 
 const S = {
   card:       { background: 'white', borderRadius: 12, padding: 24, marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
