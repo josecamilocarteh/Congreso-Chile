@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { diputados, senadores, PARTIDO_COLORS } from '../data'
 
 const OPCION_LABELS = { 'Afirmativo': 'A favor', 'En Contra': 'En contra', 'Abstencion': 'Abstención', 'No Vota': 'No vota', 'Dispensado': 'Dispensado', 'Pareo': 'Pareado' }
@@ -160,7 +160,26 @@ export default function VotacionesDia() {
         .sort((a, b) => (a.fechaHora || '').localeCompare(b.fechaHora || '') || (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
         .map((v, i) => ({ ...v, numero: i + 1 }))
 
-  // Para cada boletín del día: buscar el título del proyecto y el detalle por votación (general/particular/artículo)
+  // Orden de las votaciones dentro de cada boletín: la 1ª es "en general", el resto "en particular".
+  // Cámara: se usa todo el año (todas), así que la 1ª es la verdadera aunque sea de otro día.
+  // Senado: solo se tiene el día consultado.
+  const ordenBoletin = useMemo(() => {
+    const fuente = camara === 'sen' ? senDelDia : todas
+    const map = {}
+    ;(fuente || []).forEach(vv => {
+      const b = vv.boletin || boletinDe(vv.descripcion)
+      if (!b) return
+      if (!map[b]) map[b] = []
+      map[b].push(vv)
+    })
+    Object.keys(map).forEach(b => {
+      map[b].sort((a, c) =>
+        (a.fechaHora || a.fecha || '').localeCompare(c.fechaHora || c.fecha || '') ||
+        (parseInt(a.id) || 0) - (parseInt(c.id) || 0))
+      map[b] = map[b].map(x => String(x.id))
+    })
+    return map
+  }, [camara, todas, senDelDia])
   useEffect(() => {
     if (camara !== 'dip') return
     let activo = true
@@ -285,10 +304,18 @@ export default function VotacionesDia() {
     const titProy = bol ? titulos[bol] : undefined
     const artic = articulos[String(v.id)]
     const materia = materias[String(v.id)]                  // materia (página Cámara) para votaciones sin boletín
-    const esLey = !!(v.boletin || boletinDe(v.descripcion))
-    let fases = fasesDe([artic, v.tipo, v.descripcion, v.quorum].filter(Boolean).join(' '))
-    if (esLey && fases.length === 0) {
-      fases = [{ label: 'Votación en general', color: '#0e7490' }, { label: 'Votación en particular', color: '#7c3aed' }]
+    // Cartel general/particular según el orden dentro del boletín:
+    // 1ª votación → en general · resto → en particular · única votación → ambas.
+    const G = { label: 'Votación en general', color: '#0e7490' }
+    const P = { label: 'Votación en particular', color: '#7c3aed' }
+    const bolFase = v.boletin || boletinDe(v.descripcion)
+    let fases = []
+    if (bolFase) {
+      const lista = ordenBoletin[bolFase] || []
+      const pos = lista.indexOf(String(v.id))
+      if (lista.length <= 1) fases = [G, P]
+      else if (pos === 0) fases = [G]
+      else fases = [P]
     }
     const headline = (titProy && titProy.length) ? titProy
       : (materia && materia.length) ? materia
