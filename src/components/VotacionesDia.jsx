@@ -100,6 +100,7 @@ export default function VotacionesDia() {
   const [todas, setTodas] = useState([])
   const [fecha, setFecha] = useState('')
   const [expandId, setExpandId] = useState(null)
+  const [expandBoletin, setExpandBoletin] = useState(null)
   const [detalles, setDetalles] = useState({})        // cache por id
   const [loadingDet, setLoadingDet] = useState(null)
   const [titulos, setTitulos] = useState({})          // cache por boletín → título
@@ -428,6 +429,38 @@ export default function VotacionesDia() {
     )
   }
 
+  // Agrupa todas las votaciones de un mismo boletín en un espacio desplegable
+  function renderGrupoBoletin(bol, vots, idxGrupo) {
+    const abierto = expandBoletin === bol
+    const titulo = (titulos[bol] && titulos[bol].length) ? titulos[bol] : ('Boletín ' + bol)
+    const n = vots.length
+    // Resumen del proyecto: sumar a favor / en contra de todas sus votaciones
+    const totSi = vots.reduce((a, x) => a + (x.totalSi || 0), 0)
+    const totNo = vots.reduce((a, x) => a + (x.totalNo || 0), 0)
+    return (
+      <div key={bol} style={{ border: '1.5px solid #cbd5e1', borderRadius: 12, marginBottom: 12, overflow: 'hidden', background: 'white' }}>
+        <div onClick={() => setExpandBoletin(abierto ? null : bol)} style={{ padding: '12px 14px', cursor: 'pointer', background: abierto ? '#f0f9ff' : '#f8fafc', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#0f766e', background: '#ccfbf1', borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2, minWidth: 26, textAlign: 'center' }}>
+            #{idxGrupo + 1}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, color: '#0f172a', fontWeight: 700, lineHeight: 1.35 }}>{titulo}</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700, color: '#0f766e' }}>Boletín {bol}</span>
+              <span>{n} {n === 1 ? 'votación' : 'votaciones'}</span>
+            </div>
+          </div>
+          <span style={{ fontSize: 15, color: '#0284c7', flexShrink: 0, marginTop: 2 }}>{abierto ? '▲' : '▼'}</span>
+        </div>
+        {abierto && (
+          <div style={{ padding: '10px 12px 4px', borderTop: '1px solid #e2e8f0', background: '#fbfcfe' }}>
+            {vots.map((v, i) => renderFila(v, i))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div>
       {/* AGENDA / TABLAS */}
@@ -541,7 +574,18 @@ export default function VotacionesDia() {
                   <span style={{ fontSize: 11, color: '#94a3b8' }}>{items.length}</span>
                   <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
                 </div>
-                {items.map((v, idx) => renderFila(v, idx))}
+                {sec.key === 'ley'
+                  ? (() => {
+                      const orden = []
+                      const grupos = {}
+                      items.forEach(v => {
+                        const b = v.boletin || boletinDe(v.descripcion)
+                        if (!grupos[b]) { grupos[b] = []; orden.push(b) }
+                        grupos[b].push(v)
+                      })
+                      return orden.map((b, gi) => renderGrupoBoletin(b, grupos[b], gi))
+                    })()
+                  : items.map((v, idx) => renderFila(v, idx))}
               </div>
             )
           })}
