@@ -299,7 +299,7 @@ export default function VotacionesDia() {
         <div onClick={() => toggleDetalle(v)} style={{ padding: '12px 14px', cursor: 'pointer', background: abierto ? '#f8fafc' : 'white' }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <span style={{ fontSize: 12, fontWeight: 800, color: '#0f766e', background: '#ccfbf1', borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2, minWidth: 26, textAlign: 'center' }}>
-              #{v.numero}
+              #{idx + 1}
             </span>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'white', background: colorResultado(v.resultado), borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 2 }}>
               {v.resultado || '—'}
