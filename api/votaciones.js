@@ -25,17 +25,24 @@ const VOTACIONES_MANUALES = [
   }
 ]
 
+// El servicio wscamaradiputados.asmx está publicado en dos dominios; a veces
+// uno responde y el otro no. Se prueban en orden.
+const HOSTS = [
+  'https://opendata.camara.cl/wscamaradiputados.asmx',
+  'https://opendata.congreso.cl/wscamaradiputados.asmx'
+]
+const CAB_XML = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Accept': 'text/xml,application/xml;q=0.9,*/*;q=0.8'
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
 
   const boletin = req.query.boletin
   const votacionId = req.query.votacionId
-  const BASE = 'https://opendata.congreso.cl/wscamaradiputados.asmx'
 
   try {
-    let url = ''
-    let tipo = ''
-
     const proyecto = req.query.proyecto
 
     // Datos del proyecto desde la API del Senado
@@ -179,24 +186,61 @@ export default async function handler(req, res) {
       return res.status(200).json(parsearSenado(xmlV))
     }
 
+    // Votaciones de la CÁMARA por BOLETÍN.
+    // getVotaciones_Boletin devuelve, en la misma respuesta, los votos diputado
+    // por diputado. El servicio está publicado en dos hosts y es quisquilloso
+    // con el formato del número, así que probamos las combinaciones posibles.
+    if (boletin) {
+      const pedido = String(boletin).trim()
+      const soloNum = pedido.split('-')[0].replace(/[^0-9]/g, '')
+      const variantes = []
+      if (pedido) variantes.push(pedido)
+      if (soloNum && variantes.indexOf(soloNum) === -1) variantes.push(soloNum)
+
+      const intentos = []
+      for (let h = 0; h < HOSTS.length; h++) {
+        for (let i = 0; i < variantes.length; i++) {
+          const u = HOSTS[h] + '/getVotaciones_Boletin?prmBoletin=' + encodeURIComponent(variantes[i])
+          try {
+            const r = await fetch(u, { headers: CAB_XML })
+            if (!r.ok) { intentos.push(variantes[i] + ' @ ' + HOSTS[h] + ' → HTTP ' + r.status); continue }
+            const xmlB = await r.text()
+            const d = parsear(xmlB, 'boletin')
+            if (d.votaciones.length > 0) {
+              d.boletinConsultado = variantes[i]
+              d.fuente = u
+              return res.status(200).json(d)
+            }
+            intentos.push(variantes[i] + ' @ ' + HOSTS[h] + ' → sin votaciones')
+          } catch (e) {
+            intentos.push(variantes[i] + ' @ ' + HOSTS[h] + ' → ' + e.message)
+          }
+        }
+      }
+      return res.status(200).json({ tipo: 'boletin', votaciones: [], intentos: intentos })
+    }
+
+    // Detalle de UNA votación de la Cámara (respaldo, por si el boletín no trajo votos)
     if (votacionId) {
-      url = BASE + '/getVotacion_Detalle?prmVotacionId=' + votacionId
-      tipo = 'detalle'
-    } else if (boletin) {
-      url = BASE + '/getVotaciones_Boletin?prmBoletin=' + boletin
-      tipo = 'boletin'
-    } else {
-      return res.status(400).json({ error: 'Falta el parámetro boletin, votacionId o proyecto' })
+      const idv = String(votacionId).replace(/[^0-9]/g, '')
+      const intentosD = []
+      for (let h = 0; h < HOSTS.length; h++) {
+        const u = HOSTS[h] + '/getVotacion_Detalle?prmVotacionId=' + idv
+        try {
+          const r = await fetch(u, { headers: CAB_XML })
+          if (!r.ok) { intentosD.push(HOSTS[h] + ' → HTTP ' + r.status); continue }
+          const xmlD = await r.text()
+          const d = parsear(xmlD, 'detalle')
+          if (d.votos.length > 0) return res.status(200).json(d)
+          intentosD.push(HOSTS[h] + ' → sin votos')
+        } catch (e) {
+          intentosD.push(HOSTS[h] + ' → ' + e.message)
+        }
+      }
+      return res.status(200).json({ tipo: 'detalle', votos: [], resumen: { si: 0, no: 0, abs: 0 }, intentos: intentosD })
     }
 
-    const resp = await fetch(url)
-    if (!resp.ok) {
-      return res.status(200).json({ error: 'La API del Congreso respondió con código ' + resp.status })
-    }
-
-    const xml = await resp.text()
-    const data = parsear(xml, tipo)
-    return res.status(200).json(data)
+    return res.status(400).json({ error: 'Falta el parámetro boletin, votacionId o proyecto' })
 
   } catch (e) {
     return res.status(200).json({ error: 'Error al consultar: ' + e.message })
@@ -306,6 +350,24 @@ function parsearAnio(xml) {
     return (parseInt(a.id) || 0) - (parseInt(b.id) || 0)
   })
   return { tipo: 'anio', votaciones: votaciones }
+}
+
+// Lee el bloque <Votos><Voto><Diputado/><Opcion/></Voto>… de la Cámara.
+// Sirve tanto para getVotaciones_Boletin como para getVotacion_Detalle.
+function parsearVotosCamara(xml) {
+  const votosXml = (String(xml || '').match(/<Votos>([\s\S]*?)<\/Votos>/i) || [])[1] || ''
+  if (!votosXml) return []
+  return tagAll(votosXml, 'Voto').map(function (vt) {
+    const dip = tag(vt, 'Diputado')
+    let nombre = [
+      tag(dip, 'Nombre'),
+      tag(dip, 'Apellido_Paterno') || tag(dip, 'ApellidoPaterno'),
+      tag(dip, 'Apellido_Materno') || tag(dip, 'ApellidoMaterno')
+    ].map(limpiar).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+    if (!nombre) nombre = limpiar(dip).replace(/^\d+\s*/, '').trim()
+    const opcion = normOpcion(tag(vt, 'Opcion') || tag(vt, 'OpcionVoto') || tag(vt, 'Seleccion'))
+    return { diputado: nombre, opcion: opcion }
+  }).filter(function (x) { return x.diputado && x.opcion })
 }
 
 function normOpcion(s) {
@@ -464,21 +526,30 @@ function parsear(xml, tipo) {
 
   if (tipo === 'boletin') {
     let votaciones = tagAll(xml, 'Votacion').map(function (v) {
-      const sesionXml = (v.match(/<Sesion[^>]*>([\s\S]*?)<\/Sesion>/i) || [])[1] || ''
-      const articuloXml = (v.match(/<Articulo[^>]*>([\s\S]*?)<\/Articulo>/i) || [])[1] || ''
+      // La cabecera es todo lo anterior a <Votos>: así los tags de la votación
+      // no se confunden con los que vienen dentro de cada voto.
+      const cab = v.split('<Votos>')[0]
+      const sesionXml = (cab.match(/<Sesion[^>]*>([\s\S]*?)<\/Sesion>/i) || [])[1] || ''
+      const articuloXml = (cab.match(/<Articulo[^>]*>([\s\S]*?)<\/Articulo>/i) || [])[1] || ''
       const descripcion = articuloXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      const fechaHora = limpiar(tag(cab, 'Fecha'))
       return {
-        id: tag(v, 'ID'),
-        fechaHora: tag(v, 'Fecha'),
-        fecha: tag(v, 'Fecha').split('T')[0],
-        resultado: tag(v, 'Resultado'),
-        quorum: tag(v, 'Quorum'),
-        boletin: tag(v, 'Boletin'),
-        descripcion: descripcion,
-        sesionId: tag(sesionXml, 'ID'),
-        totalSi: parseInt(tag(v, 'TotalAfirmativos')) || 0,
-        totalNo: parseInt(tag(v, 'TotalNegativos')) || 0,
-        totalAbs: parseInt(tag(v, 'TotalAbstenciones')) || 0
+        id: limpiar(tag(cab, 'ID')) || limpiar(tag(cab, 'Id')),
+        fechaHora: fechaHora,
+        fecha: (fechaHora.split('T')[0] || fechaHora).slice(0, 10),
+        resultado: limpiar(tag(cab, 'Resultado')),
+        quorum: limpiar(tag(cab, 'Quorum')),
+        tipoVotacion: limpiar(tag(cab, 'Tipo')),
+        tramite: limpiar(tag(cab, 'Tramite')),
+        boletin: limpiar(tag(cab, 'Boletin')),
+        descripcion: descripcion || limpiar(tag(cab, 'Tipo')),
+        sesionId: limpiar(tag(sesionXml, 'ID')),
+        sesion: limpiar(tag(sesionXml, 'Numero')),
+        totalSi: parseInt(tag(cab, 'TotalAfirmativos')) || 0,
+        totalNo: parseInt(tag(cab, 'TotalNegativos')) || 0,
+        totalAbs: parseInt(tag(cab, 'TotalAbstenciones')) || 0,
+        totalDisp: parseInt(tag(cab, 'TotalDispensados')) || 0,
+        votos: parsearVotosCamara(v)
       }
     })
     votaciones.sort(function (a, b) { return a.fechaHora.localeCompare(b.fechaHora) })
@@ -496,21 +567,7 @@ function parsear(xml, tipo) {
     const totalAbs = parseInt(tag(xml, 'TotalAbstenciones')) || 0
 
     // 1) Intentar leer los votos desde la estructura XML real <Votos><Voto><Diputado/><Opcion/></Voto>
-    let votos = []
-    const votosXml = (xml.match(/<Votos>([\s\S]*?)<\/Votos>/i) || [])[1] || ''
-    if (votosXml) {
-      votos = tagAll(votosXml, 'Voto').map(function (vt) {
-        const dip = tag(vt, 'Diputado')
-        let nombre = [
-          tag(dip, 'Nombre'),
-          tag(dip, 'Apellido_Paterno') || tag(dip, 'ApellidoPaterno'),
-          tag(dip, 'Apellido_Materno') || tag(dip, 'ApellidoMaterno')
-        ].map(limpiar).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
-        if (!nombre) nombre = limpiar(dip).replace(/^\d+\s*/, '').trim()  // quitar Id inicial si vino plano
-        const opcion = normOpcion(tag(vt, 'Opcion') || tag(vt, 'OpcionVoto') || tag(vt, 'Seleccion'))
-        return { diputado: nombre, opcion: opcion }
-      }).filter(function (x) { return x.diputado && x.opcion })
-    }
+    let votos = parsearVotosCamara(xml)
 
     // 2) Fallback: texto plano "ID Nombre Apellido1 Apellido2 Opcion" (formato antiguo)
     if (votos.length === 0) {
