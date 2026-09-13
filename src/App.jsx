@@ -25,7 +25,7 @@ export default function App() {
     ['senado', '🏛 Senado', '#1e40af'],
     ['diputados', '🏢 Cámara de Diputados', '#1e40af'],
     ['simulador', '⚖️ Simulador de Quórums', '#7c3aed'],
-    ['votaciones', '🗳 Votaciones Cámara', '#0f766e'],
+    ['votaciones', '🗳 Votaciones por boletín', '#0f766e'],
     ['votsenado', '🏛 Votaciones Senado', '#7c3aed'],
     ['votdia', '🗓 Votaciones por día', '#0f766e'],
     ['clave', '🎯 Votaciones Clave', '#be123c'],
