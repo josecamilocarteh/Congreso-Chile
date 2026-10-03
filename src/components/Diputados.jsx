@@ -7,7 +7,7 @@ const DISTRITOS = [...new Set(diputados.map(d => d.distrito))].sort((a,b) => a-b
 
 // Agrupar por partido para el hemiciclo (partidos juntos)
 const ORDEN_PARTIDOS_OP = ['PS', 'PPD', 'PDC', 'PC', 'FA', 'FREVS', 'Liberal', 'AH', 'DEM']
-const ORDEN_PARTIDOS_OF = ['RN', 'UDI', 'Republicano', 'Evópoli', 'PNL', 'PSC']
+const ORDEN_PARTIDOS_OF = ['RN', 'UDI', 'Republicano', 'Evópoli', 'PNL', 'P.Cristiano']
 
 function agruparPorPartido(lista, ordenPartidos) {
   const result = []
