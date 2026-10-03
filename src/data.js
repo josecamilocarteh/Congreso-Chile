@@ -15,7 +15,7 @@ export const PARTIDO_COLORS = {
   'PDG': '#ea580c',
   'PNL': '#0ea5e9',
   'AH': '#10b981',
-  'PSC': '#f43f5e',
+  'P.Cristiano': '#f43f5e',
 }
 
 export const senadores = [
@@ -211,15 +211,15 @@ export const diputados = [
   { nombre: 'Francisco Crisóstomo Llanos', partido: 'PS', bloque: 'Oposición', region: 'Ñuble', distrito: 19, votos: 15651, porcentaje: '4,75%' },
   { nombre: 'Cristóbal Martínez', partido: 'UDI', bloque: 'Oficialismo', region: 'Ñuble', distrito: 19, votos: 24506, porcentaje: '7,43%' },
   { nombre: 'Carlos Chandía Alarcón', partido: 'RN', bloque: 'Oficialismo', region: 'Ñuble', distrito: 19, votos: 22818, porcentaje: '6,92%' },
-  { nombre: 'Sara Concha Smith', partido: 'PSC', bloque: 'Oficialismo', region: 'Ñuble', distrito: 19, votos: 18556, porcentaje: '5,63%' },
+  { nombre: 'Sara Concha Smith', partido: 'P.Cristiano', bloque: 'Oficialismo', region: 'Ñuble', distrito: 19, votos: 18556, porcentaje: '5,63%' },
   // D20 - Biobío (costa)
   { nombre: 'Álvaro Ortiz Vera', partido: 'PDC', bloque: 'Oposición', region: 'Biobío', distrito: 20, votos: 41837, porcentaje: '7,13%' },
   { nombre: 'Antonio Rivas Villalobos', partido: 'PS', bloque: 'Oposición', region: 'Biobío', distrito: 20, votos: 27175, porcentaje: '4,63%' },
   { nombre: 'Patricio Briones Möller', partido: 'PDG', bloque: 'Independiente', region: 'Biobío', distrito: 20, votos: 18160, porcentaje: '3,09%' },
   { nombre: 'Sergio Bobadilla Muñoz', partido: 'UDI', bloque: 'Oficialismo', region: 'Biobío', distrito: 20, votos: 19213, porcentaje: '3,27%' },
   { nombre: 'Marlene Pérez Cartes', partido: 'UDI', bloque: 'Oficialismo', region: 'Biobío', distrito: 20, votos: 26600, porcentaje: '4,53%' },
-  { nombre: 'Francesca Muñoz González', partido: 'PSC', bloque: 'Oficialismo', region: 'Biobío', distrito: 20, votos: 53997, porcentaje: '9,20%' },
-  { nombre: 'Roberto Arroyo González', partido: 'PSC', bloque: 'Oficialismo', region: 'Biobío', distrito: 20, votos: 7892, porcentaje: '1,34%' },
+  { nombre: 'Francesca Muñoz González', partido: 'P.Cristiano', bloque: 'Oficialismo', region: 'Biobío', distrito: 20, votos: 53997, porcentaje: '9,20%' },
+  { nombre: 'Roberto Arroyo González', partido: 'PDG', bloque: 'Independiente', region: 'Biobío', distrito: 20, votos: 7892, porcentaje: '1,34%' },
   { nombre: 'Paz Charpentier Rajcevich', partido: 'Republicano', bloque: 'Oficialismo', region: 'Biobío', distrito: 20, votos: 44943, porcentaje: '7,66%' },
   // D21 - Biobío (interior)
   { nombre: 'Patricio Pinilla Valencia', partido: 'PDC', bloque: 'Oposición', region: 'Biobío', distrito: 21, votos: 20035, porcentaje: '5,13%' },
@@ -258,7 +258,7 @@ export const diputados = [
   { nombre: 'Mauro González Villarroel', partido: 'RN', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 26, votos: 35202, porcentaje: '11,85%' },
   { nombre: 'Claudia Reyes Larenas', partido: 'Republicano', bloque: 'Oficialismo', region: 'Los Lagos', distrito: 26, votos: 30865, porcentaje: '10,39%' },
   // D27 - Aysén
-  { nombre: 'René Alinco Bustos', partido: 'FREVS', bloque: 'Oposición', region: 'Aysén', distrito: 27, votos: 8889, porcentaje: '14,26%' },
+  { nombre: 'René Alinco Bustos', partido: 'Independiente', bloque: 'Oposición', region: 'Aysén', distrito: 27, votos: 8889, porcentaje: '14,26%' },
   { nombre: 'Andrea Macías Palma', partido: 'PS', bloque: 'Oposición', region: 'Aysén', distrito: 27, votos: 9625, porcentaje: '15,44%' },
   { nombre: 'Alejandra Valdebenito Rodríguez', partido: 'UDI', bloque: 'Oficialismo', region: 'Aysén', distrito: 27, votos: 6451, porcentaje: '10,35%' },
   // D28 - Magallanes
