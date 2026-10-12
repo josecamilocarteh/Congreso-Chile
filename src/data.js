@@ -168,7 +168,7 @@ export const diputados = [
   { nombre: 'Zandra Parisi Fernández', partido: 'PDG', bloque: 'Independiente', region: 'Metropolitana', distrito: 12, votos: 15249, porcentaje: '2,46%' },
   { nombre: 'Ximena Ossandón Rodríguez', partido: 'RN', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12, votos: 48711, porcentaje: '7,87%' },
   { nombre: 'Álvaro Carter Fernández', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12, votos: 69157, porcentaje: '11,18%' },
-  { nombre: 'Macarena Santelices Cañas', partido: 'Republicano', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12, votos: 23062, porcentaje: '3,73%' },
+  { nombre: 'Macarena Santelices Cañas', partido: 'UDI', bloque: 'Oficialismo', region: 'Metropolitana', distrito: 12, votos: 23062, porcentaje: '3,73%' },
   // D13 - Metropolitana (sur poniente)
   { nombre: 'Lorena Pizarro Soto', partido: 'PC', bloque: 'Oposición', region: 'Metropolitana', distrito: 13, votos: 30352, porcentaje: '8,17%' },
   { nombre: 'Gael Yeomans Araya', partido: 'FA', bloque: 'Oposición', region: 'Metropolitana', distrito: 13, votos: 46765, porcentaje: '12,55%' },
