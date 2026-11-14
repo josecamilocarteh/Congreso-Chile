@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { diputados, senadores, PARTIDO_COLORS } from '../data'
+import BotonEnlace from './BotonEnlace'
 
 const OPCION_LABELS = { 'Afirmativo': 'A favor', 'En Contra': 'En contra', 'Abstencion': 'Abstención', 'No Vota': 'No vota', 'Dispensado': 'Dispensado', 'Pareo': 'Pareado' }
 const OPCION_COLORS = { 'Afirmativo': '#10b981', 'En Contra': '#ef4444', 'Abstencion': '#f59e0b', 'No Vota': '#94a3b8', 'Dispensado': '#cbd5e1', 'Pareo': '#cbd5e1' }
@@ -40,20 +41,20 @@ function apellidoDe(nombre) {
   while (i > 0 && CONECTORES.has(t[i])) i--
   return t[i]
 }
-function formatFecha(iso) {
+export function formatFecha(iso) {
   const p = (iso || '').split('-')
   if (p.length !== 3) return iso
   const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]))
   if (isNaN(d)) return iso
   return `${DIAS[d.getDay()]} ${Number(p[2])} de ${MESES[Number(p[1]) - 1]} de ${p[0]}`
 }
-function colorResultado(r) {
+export function colorResultado(r) {
   const t = (r || '').toLowerCase()
   if (t.includes('aprob')) return '#10b981'
   if (t.includes('rechaz')) return '#ef4444'
   return '#64748b'
 }
-function boletinDe(texto) {
+export function boletinDe(texto) {
   const m = (texto || '').match(/(\d{4,6}-\d{2})/)
   return m ? m[1] : null
 }
@@ -92,6 +93,34 @@ function inferSexo(nombre) {
   if (FEM_EXTRA.has(first)) return 'F'
   if (MASC_EXTRA.has(first)) return 'M'
   return first.endsWith('a') ? 'F' : 'M'
+}
+
+// Agrega partido, región, distrito, bloque y sexo a cada voto (usado también por la página de enlace permanente)
+export function enriquecerVotos(votos, esSenado) {
+  return (votos || []).map(voto => {
+    if (esSenado) {
+      const sen = buscarSenador(voto.diputado)
+      return {
+        ...voto,
+        partido: sen?.partido || 'Sin partido',
+        apellido: apellidoDe(sen?.nombre || voto.diputado),
+        region: sen?.region || '',
+        distrito: '',
+        bloque: sen?.bloque || '',
+        sexo: sen ? inferSexo(sen.nombre) : inferSexo(voto.diputado)
+      }
+    }
+    const dip = buscarDiputado(voto.diputado)
+    return {
+      ...voto,
+      partido: dip?.partido || 'Sin partido',
+      apellido: apellidoDe(dip?.nombre || voto.diputado),
+      region: dip?.region || '',
+      distrito: dip?.distrito != null ? dip.distrito : '',
+      bloque: dip?.bloque || '',
+      sexo: dip ? inferSexo(dip.nombre) : ''
+    }
+  })
 }
 
 export default function VotacionesDia() {
@@ -361,6 +390,7 @@ export default function VotacionesDia() {
                 {v.quorum && <span>Quórum: {v.quorum}</span>}
               </div>
             </div>
+            <BotonEnlace camara={camara} fecha={v.fecha || fecha} id={v.id} />
             <button
               onClick={(e) => { e.stopPropagation(); descargarPDF(v) }}
               disabled={generandoPDF === v.id}
@@ -649,7 +679,7 @@ export default function VotacionesDia() {
   )
 }
 
-function DesgloseVotos({ votos, esSenado }) {
+export function DesgloseVotos({ votos, esSenado }) {
   const [orden, setOrden] = useState('partido')
   const [filtroOpcion, setFiltroOpcion] = useState('Todos')
   const [fPartido, setFPartido] = useState('Todos')
@@ -812,7 +842,7 @@ function DesgloseVotos({ votos, esSenado }) {
 // Generación de PDF por votación (usa jsPDF + jspdf-autotable cargados por
 // CDN en index.html — ver window.jspdf). No depende de ningún build step.
 // ---------------------------------------------------------------------------
-function generarPDFVotacion(v, votos, camaraSel) {
+export function generarPDFVotacion(v, votos, camaraSel) {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     alert('El generador de PDF todavía está cargando. Espera un segundo y vuelve a intentarlo.')
     return

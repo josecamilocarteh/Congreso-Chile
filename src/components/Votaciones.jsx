@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { diputados, PARTIDO_COLORS } from '../data'
+import BotonEnlace from './BotonEnlace'
 
 // ---------------------------------------------------------------------------
 // Votaciones de la Cámara de Diputadas y Diputados, buscadas POR BOLETÍN.
@@ -297,6 +298,9 @@ export default function Votaciones() {
                   {detalle.fecha ? fechaLarga(detalle.fecha) + ' · ' : ''}
                   <a href={`https://www.camara.cl/legislacion/sala_sesiones/votacion_detalle.aspx?prmIdVotacion=${votacionSel.id}`}
                     target="_blank" rel="noreferrer" style={{ color: '#0f766e' }}>ver ficha oficial</a>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <BotonEnlace camara="dip" fecha={votacionSel.fecha || detalle.fecha} id={votacionSel.id} />
                 </div>
               </div>
 
