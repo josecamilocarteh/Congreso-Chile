@@ -6,6 +6,8 @@ import Votaciones from './components/Votaciones'
 import VotacionesSenado from './components/VotacionesSenado'
 import VotacionesDia from './components/VotacionesDia'
 import VotacionesClave from './components/VotacionesClave'
+import VotacionPermalink from './components/VotacionPermalink'
+import { leerRutaVotacion } from './enlaces'
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 720 : false)
@@ -20,6 +22,17 @@ function useIsMobile() {
 export default function App() {
   const [tab, setTab] = useState('senado')
   const isMobile = useIsMobile()
+  // Enlace permanente a una votación: /votacion/camara|senado/AAAA-MM-DD/ID
+  const [rutaVot, setRutaVot] = useState(() => typeof window !== 'undefined' ? leerRutaVotacion(window.location.pathname) : null)
+  useEffect(() => {
+    const onPop = () => setRutaVot(leerRutaVotacion(window.location.pathname))
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+  function irAPestana(key) {
+    if (rutaVot) { window.history.pushState({}, '', '/'); setRutaVot(null); window.scrollTo(0, 0) }
+    setTab(key)
+  }
 
   const TABS = [
     ['senado', '🏛 Senado', '#1e40af'],
@@ -54,9 +67,9 @@ export default function App() {
           {/* Fila de pestañas */}
           <div style={{ display: 'flex', gap: isMobile ? 6 : 8, flexWrap: 'wrap', marginTop: isMobile ? 14 : 16 }}>
             {TABS.map(([key, label, color]) => {
-              const active = tab === key
+              const active = !rutaVot && tab === key
               return (
-                <button key={key} onClick={() => setTab(key)} style={{
+                <button key={key} onClick={() => irAPestana(key)} style={{
                   padding: isMobile ? '8px 12px' : '9px 20px',
                   borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600,
                   fontSize: isMobile ? 12.5 : 14, fontFamily: "'Inter', sans-serif",
@@ -75,7 +88,7 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '20px 12px 48px' : '32px 20px 60px' }}>
-        {tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : tab === 'simulador' ? <SimuladorQuorum /> : tab === 'votaciones' ? <Votaciones /> : tab === 'votsenado' ? <VotacionesSenado /> : tab === 'votdia' ? <VotacionesDia /> : <VotacionesClave />}
+        {rutaVot ? <VotacionPermalink {...rutaVot} onVolver={() => irAPestana(tab)} /> : tab === 'senado' ? <Senado /> : tab === 'diputados' ? <Diputados /> : tab === 'simulador' ? <SimuladorQuorum /> : tab === 'votaciones' ? <Votaciones /> : tab === 'votsenado' ? <VotacionesSenado /> : tab === 'votdia' ? <VotacionesDia /> : <VotacionesClave />}
       </main>
 
       <footer style={styles.footer}>
