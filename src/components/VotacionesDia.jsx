@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { diputados, senadores, PARTIDO_COLORS } from '../data'
 import BotonEnlace from './BotonEnlace'
+import { codigoVotacion, copiarTexto } from '../enlaces'
+import { resumirMateria, URL_SALA_CAMARA } from '../materiaVotacion'
 
 const OPCION_LABELS = { 'Afirmativo': 'A favor', 'En Contra': 'En contra', 'Abstencion': 'Abstención', 'No Vota': 'No vota', 'Dispensado': 'Dispensado', 'Pareo': 'Pareado' }
 const OPCION_COLORS = { 'Afirmativo': '#10b981', 'En Contra': '#ef4444', 'Abstencion': '#f59e0b', 'No Vota': '#94a3b8', 'Dispensado': '#cbd5e1', 'Pareo': '#cbd5e1' }
@@ -327,7 +329,7 @@ export default function VotacionesDia() {
     }
   }
 
-  function renderFila(v, idx) {
+  function renderFila(v, idx, enGrupo = false) {
     const total = v.totalSi + v.totalNo + v.totalAbs
     const abierto = expandId === v.id
     const det = detalles[v.id]
@@ -352,6 +354,9 @@ export default function VotacionesDia() {
       : (materia && materia.length) ? materia
       : (v.descripcion || v.tipo || '(Sin descripción registrada)')
     const esManual = v.fuente === 'manual'
+  const codigo = codigoVotacion(camara, v.id)
+  const resumen = resumirMateria(artic && artic.length ? artic : v.descripcion)
+  const tituloTarjeta = (enGrupo && artic && artic.length) ? artic : headline
     return (
       <div key={v.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
         <div onClick={() => toggleDetalle(v)} style={{ padding: '12px 14px', cursor: 'pointer', background: abierto ? '#f8fafc' : 'white' }}>
@@ -375,8 +380,15 @@ export default function VotacionesDia() {
                   ))}
                 </div>
               )}
-              <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 600, lineHeight: 1.35 }}>{headline}</div>
-              {artic && artic.length > 0 ? (
+              {resumen.etiquetas.length > 0 && (
+<div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 4 }}>
+{resumen.etiquetas.map(e => (
+<span key={e} style={{ fontSize: 10.5, fontWeight: 800, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 5, padding: '2px 7px' }}>{e}</span>
+))}
+</div>
+)}
+<div style={{ fontSize: 13, color: '#0f172a', fontWeight: 600, lineHeight: 1.35 }}>{tituloTarjeta}</div>
+              {enGrupo ? null : artic && artic.length > 0 ? (
                 <div style={{ fontSize: 12, color: '#334155', marginTop: 3, lineHeight: 1.4 }}>
                   <span style={{ color: '#64748b', fontWeight: 600 }}>Se vota: </span>{artic}
                 </div>
@@ -385,6 +397,7 @@ export default function VotacionesDia() {
               ))}
               <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {bol && <span style={{ fontWeight: 700, color: '#0f766e' }}>Boletín {bol}</span>}
+<button onClick={(e) => { e.stopPropagation(); copiarTexto(codigo) }} title="Copiar código de la votación" style={{ fontSize: 11, fontWeight: 800, color: '#1e3a8a', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 5, padding: '1px 7px', cursor: 'pointer' }}>Código {codigo}</button>
                 {bol && titulos[bol] === null && <span>buscando detalle…</span>}
                 {!bol && materia === null && <span>buscando materia…</span>}
                 {v.quorum && <span>Quórum: {v.quorum}</span>}
@@ -485,7 +498,7 @@ export default function VotacionesDia() {
         </div>
         {abierto && (
           <div style={{ padding: '10px 12px 4px', borderTop: '1px solid #e2e8f0', background: '#fbfcfe' }}>
-            {vots.map((v, i) => renderFila(v, i))}
+            {vots.map((v, i) => renderFila(v, i, true))}
           </div>
         )}
       </div>
@@ -608,7 +621,12 @@ export default function VotacionesDia() {
         <div style={S.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14, flexWrap: 'wrap', gap: 6 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', textTransform: 'capitalize' }}>{formatFecha(fecha)}{camara === 'sen' ? ' · Senado' : ''}</div>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>{delDia.length} {delDia.length === 1 ? 'votación' : 'votaciones'}</div>
+            <div style={{ fontSize: 12, color: '#94a3b8', display: 'flex', gap: 10, alignItems: 'baseline' }}>
+<span>{delDia.length} {delDia.length === 1 ? 'votación' : 'votaciones'}</span>
+{camara === 'dip' && (
+<a href={URL_SALA_CAMARA} target="_blank" rel="noreferrer" style={{ color: '#0f766e', fontWeight: 700, textDecoration: 'none' }}>Minuta de Sala ↗</a>
+)}
+</div>
           </div>
 
           {generalesDia.length > 0 && (
